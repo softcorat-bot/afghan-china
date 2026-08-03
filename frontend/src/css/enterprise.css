@@ -1,0 +1,133 @@
+/* ─────────────────────────────────────────────────────────────────
+   Enterprise polish layer — refinements ON TOP of brand.css/app.scss
+   (which stay untouched per the design-system rules). Goal: Stripe /
+   Linear-grade finish — consistent radii, soft shadows, calm focus
+   states, readable tables, smooth micro-interactions. Additive only.
+   ───────────────────────────────────────────────────────────────── */
+
+/* Typography rhythm */
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Cards & dialogs: one radius language, softer elevation */
+.q-card {
+  border-radius: 14px;
+}
+.q-dialog .q-card {
+  border-radius: 16px;
+  box-shadow: 0 24px 60px -24px rgba(15, 23, 42, 0.35);
+}
+.q-menu {
+  border-radius: 12px;
+  box-shadow: 0 16px 40px -18px rgba(15, 23, 42, 0.3);
+}
+
+/* Buttons: calmer, rounder, honest hover */
+.q-btn {
+  border-radius: 9px;
+  transition: box-shadow 0.18s ease, transform 0.18s ease, background-color 0.18s ease;
+}
+.q-btn--unelevated:not(.q-btn--round):hover {
+  box-shadow: 0 8px 18px -10px rgba(15, 23, 42, 0.45);
+}
+
+/* Inputs: consistent radius + a clear but soft focus ring */
+.q-field--outlined .q-field__control {
+  border-radius: 10px;
+}
+.q-field--outlined.q-field--focused .q-field__control:after {
+  border-width: 1.5px;
+}
+.q-field--outlined .q-field__control:before {
+  transition: border-color 0.18s ease;
+}
+
+/* Tables: quiet headers, comfortable rows, hover affordance */
+.q-table th,
+.q-markup-table th {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.q-table tbody tr,
+.q-markup-table tbody tr {
+  transition: background-color 0.12s ease;
+}
+.q-table tbody tr:hover,
+.q-markup-table tbody tr:hover {
+  background: rgba(23, 90, 140, 0.045);
+}
+
+/* Chips & badges: tidy corners */
+.q-chip {
+  border-radius: 8px;
+}
+.q-badge {
+  border-radius: 7px;
+  font-weight: 700;
+}
+
+/* Notifications */
+.q-notification {
+  border-radius: 12px;
+  box-shadow: 0 18px 40px -18px rgba(15, 23, 42, 0.4);
+}
+
+/* Tabs: crisper active state */
+.q-tab {
+  transition: color 0.15s ease;
+}
+.q-tab__indicator {
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+/* Scrollbars: slim + unobtrusive (WebKit + Firefox) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #C4CFDB transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #C4CFDB;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #9FB0C2;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Page transitions: subtle rise-in for route content */
+.q-page {
+  animation: pageIn 0.28s ease both;
+}
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Tooltips */
+.q-tooltip {
+  border-radius: 8px;
+  font-size: 11.5px;
+  background: #0E2A47;
+}
+
+/* Focus visibility for keyboard users */
+.q-btn:focus-visible,
+a:focus-visible {
+  outline: 2px solid #C8862D;
+  outline-offset: 2px;
+}
+
+/* Reduced motion friendliness */
+@media (prefers-reduced-motion: reduce) {
+  .q-page { animation: none; }
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}

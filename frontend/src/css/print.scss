@@ -1,0 +1,79 @@
+/* Shared print rules — hide the app chrome so only the printable content
+   (label sheets, receipts) reaches the paper. Extension layer; brand.css
+   and app.scss stay untouched. */
+@media print {
+  .q-drawer, .q-header, .q-footer, .q-page-sticky, .q-fab, .no-print {
+    display: none !important;
+  }
+  .q-drawer-container, .q-page-container {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  body, .q-layout, .q-page {
+    background: #fff !important;
+  }
+}
+
+/* Receipt / report thermal (80mm) styles — shared by ReceiptPrint.vue and
+   ShiftReportPrint.vue. Hidden on screen; only shown when printing. */
+.receipt-print { display: none; }
+
+@media print {
+  #q-app { display: none !important; }
+  /* Dialogs, toasts and menus are teleported to <body>, i.e. outside #q-app —
+     hiding the app alone would still print the "Sale complete" card over the
+     bill. (The print.js path builds its own document and never sees these; this
+     keeps the browser-print fallback producing the same paper.) */
+  .q-dialog, .q-notifications, .q-menu, .q-tooltip, .q-loading, .q-dialog__backdrop {
+    display: none !important;
+  }
+  .receipt-print {
+    display: block !important;
+    position: absolute; top: 0; left: 0;
+    width: 80mm;
+  }
+  .rcp {
+    width: 76mm; margin: 0 auto; padding: 2mm 1mm;
+    font-family: 'Courier New', monospace; color: #000; font-size: 11px; line-height: 1.35;
+  }
+  .rcp__head { text-align: center; margin-bottom: 4px; }
+  .rcp__store { font-size: 14px; font-weight: 800; }
+  .rcp__sub { font-size: 10px; }
+  .rcp__meta { font-size: 10px; }
+  .rcp__rule { border-top: 1px dashed #000; margin: 4px 0; }
+  .rcp__items { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+  .rcp__items th { font-weight: 700; text-align: left; }
+  .rcp__items .c { text-align: center; }
+  .rcp__items .r, .rcp__items th.r { text-align: right; }
+  .rcp__unit { font-size: 9px; color: #333; }
+  .rcp__tot { display: flex; justify-content: space-between; font-size: 11px; }
+  .rcp__tot--grand { font-weight: 800; font-size: 13px; }
+  .rcp__barcode { display: block; margin: 6px auto 0; }
+  .rcp__foot { text-align: center; margin-top: 6px; font-size: 10px; }
+
+  /* Bill header mark and the detail rows. Kept in step with RECEIPT_CSS in
+     ReceiptPrint.vue, which is the copy print.js carries into its own window —
+     both paths have to produce the same paper. */
+  .rcp__logo {
+    display: block; margin: 0 auto 4px; width: 46px; height: auto;
+    /* A thermal head prints black or nothing: force the mark to solid ink. */
+    filter: grayscale(1) contrast(2.2);
+  }
+  .rcp__title { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 3px; }
+  .rcp__metarow { display: flex; justify-content: space-between; gap: 8px; }
+  .rcp__count { text-align: center; font-size: 10px; margin-top: 3px; }
+  .rcp__saved {
+    text-align: center; font-size: 11px; font-weight: 800; margin-top: 4px;
+    border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 3px 0;
+  }
+
+  /* The Receipt Designer's choices: paper width, and the two blocks it can add. */
+  .rcp--58mm { width: 54mm; }
+  .rcp--80mm { width: 76mm; }
+  .rcp__loyal {
+    text-align: center; margin-top: 5px; padding: 3px 0;
+    font-size: 10px; font-weight: 700;
+    border-top: 1px dashed #000; border-bottom: 1px dashed #000;
+  }
+  .rcp__note { text-align: center; margin-top: 4px; font-size: 9px; color: #333; white-space: pre-line; }
+}

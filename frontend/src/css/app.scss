@@ -1,0 +1,237 @@
+// app global css
+
+// Farsi/Dari font from the legacy app (bundled locally so it works under
+// Electron file:// where Google webfonts are unavailable).
+@font-face {
+  font-family: 'afg_sans';
+  src: url('../assets/fonts/afg_sans.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+// Legacy utility classes (three_d shadows, my_radio corners, btn_ colors,
+// gradients, custom scrollbar) are loaded via quasar.config css: ['brand.css'].
+
+// Match the legacy app's typography. Poppins falls back to Roboto if the
+// webfont isn't present locally.
+body,
+.q-table th,
+.q-item {
+  font-family: 'Poppins', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+// Soft page background like the old app
+.q-page-container {
+  background: #f5f8fe;
+}
+
+// ── RTL (Dari) ────────────────────────────────────────────────────────────
+// Quasar's base stylesheet pins `html, body, #q-app { direction: ltr }`, which
+// silently beat the `dir="rtl"` attribute: Dari text appeared but the layout
+// never mirrored, and every logical property in this codebase
+// (inset-inline-start, border-inline-start, text-align: start/end) resolved as
+// if the app were still left-to-right. Turning the document truly RTL is what
+// makes all of that work — so it is the first rule here, and it needs the
+// specificity to win.
+html[dir='rtl'],
+html[dir='rtl'] body,
+html[dir='rtl'] #q-app {
+  direction: rtl;
+}
+
+[dir="rtl"] {
+  body, .q-table th, .q-item {
+    font-family: 'afg_sans', 'Vazirmatn', 'Tahoma', 'Arial', sans-serif;
+  }
+
+  // The nav drawer deliberately stays on the left. Quasar reserves room for it
+  // with an *inline* `padding-left` on the page container, so moving it right
+  // would need that padding overridden with !important — which then breaks the
+  // moment the drawer closes (below the 600 px breakpoint, or when toggled off)
+  // and leaves a 262 px gap against nothing. The content area mirrors properly,
+  // which is what actually matters for reading; the nav keeps its position.
+  .q-item__section--avatar { margin-right: 0; margin-left: 16px; }
+  .q-field__prepend { padding-right: 0; padding-left: 8px; }
+  .q-table th, .q-table td { text-align: right; }
+  .q-table th:last-child, .q-table td:last-child { text-align: left; }
+  .q-expansion-item__toggle-icon { transform: rotate(180deg); }
+  .q-expansion-item--expanded .q-expansion-item__toggle-icon { transform: rotate(270deg); }
+
+  // Numbers, money, invoice numbers and barcodes stay left-to-right even inside
+  // an RTL sentence. Without this the currency jumps to the front and "85 AFN"
+  // renders as "AFN 85", which is wrong in Dari as well as in English.
+  .stat-card__value, .stat-card__foot,
+  .pos-card__price, .pos-line__price, .pos-line__total, .pos-qty__n,
+  .pos-foot__row b, .pos-foot__row span, .pos-foot__grand span,
+  .pos-cash__t b, .pos-recv__i, .pos-recv__c b, .pos-recv__note,
+  .pos-tend__i, .pos-note, .pos-change b, .pos-give b, .pos-pay-due b,
+  .ht--right, .pr-table .r, .db-sot__lbl, .db-sot__foot,
+  .db-sale__amt, .db-exp__amt, .db-cat__meta, .db-cat__n, .db-top__rev, .db-low__min,
+  .cd-badge__spend, .cd-fav__total, .cd-step small,
+  .mc-diff, .mc-margin, .rcp__tot, .rcp__items .r, .rd-tot, .rd-items .r,
+  .ws-line__val, .ws-cust__nums b, .ws-money {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+}
+
+// ── Theme CSS variable fallbacks ───────────────────────────────────────────
+:root {
+  --my-radius: 8px;
+}
+
+// Apply theme radius to all cards and inputs globally
+.q-card, .q-btn, .q-field__control, .q-dialog__inner > div {
+  border-radius: var(--my-radius) !important;
+}
+.q-field--outlined .q-field__control {
+  border-radius: var(--my-radius) !important;
+}
+
+// ── Layered dark theme ───────────────────────────────────────────────────────
+// Surface "elevation" levels so dark mode has depth (page < card < raised), not
+// one flat colour. Hard-coded whites that use var(--surface-card) adapt too.
+:root {
+  --surface-page:   #f5f8fe;
+  --surface-card:   #ffffff;
+  --surface-raised: #ffffff;
+  --surface-input:  #ffffff;
+  --surface-hover:  #eef3fb;
+  --surface-border: #e3e8f0;
+  --on-surface:     #243244;
+  --on-surface-dim: #5f7387;
+}
+body.body--dark {
+  --surface-page:   #0e1320;
+  --surface-card:   #1a2132;
+  --surface-raised: #222c42;
+  --surface-input:  #141b29;
+  --surface-hover:  #28344e;
+  --surface-border: #2c3854;
+  --on-surface:     #e6eaf2;
+  --on-surface-dim: #95a2b8;
+
+  // Page + generic surfaces
+  .q-page-container { background: var(--surface-page) !important; }
+  .bg-white,
+  .q-card, .q-menu, .q-table,
+  .three_d, .three_d_new, .three_d_smooth, .three_d_nice, .three_d_plan,
+  .three_d_latest, .three_d_high, .three_d_less {
+    background: var(--surface-card) !important;
+    color: var(--on-surface);
+  }
+  .bg-grey-1, .bg-grey-2, .bg-grey-3, .bg-grey-4 { background: var(--surface-raised) !important; }
+  .bg-theme-soft, .bg-theme-softer { background: rgba(255,255,255,.05) !important; }
+  .three_d, .three_d_new, .three_d_smooth, .three_d_plan { box-shadow: rgba(0,0,0,.45) 0 4px 16px !important; }
+  .three_d_latest {
+    box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.55), 0 24px 60px -20px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  // Tables, menus, separators, inputs
+  .q-table thead tr, .q-table th, .q-table tbody td { background: var(--surface-card) !important; }
+  .q-table th { color: var(--on-surface-dim) !important; }
+  .q-table tbody tr:hover td { background: var(--surface-hover) !important; }
+  .q-separator { background: var(--surface-border) !important; }
+  .q-field--outlined .q-field__control { background: var(--surface-input); }
+  .q-field__native, .q-field__input, .q-field__prefix, .q-field__suffix { color: var(--on-surface) !important; }
+
+  // Text fixups for the common dark-on-white classes
+  .text-grey-8, .text-grey-9, .text-grey-10, .text-dark,
+  .text-blue-grey-8, .text-blue-grey-9, .text-blue-grey-10 { color: var(--on-surface) !important; }
+  .text-grey-7, .text-grey-6, .text-blue-grey-6, .text-blue-grey-7 { color: var(--on-surface-dim) !important; }
+
+  // ── Sidebar / drawer ──
+  .sidebar-drawer { background: var(--surface-raised) !important; border-right: 1px solid var(--surface-border) !important; }
+  .sidebar-brand { background: linear-gradient(135deg, #1d2840 0%, #161d2e 100%) !important; border-bottom: 1px solid var(--surface-border) !important; }
+  .branch-switcher { background: var(--surface-input) !important; border-color: var(--surface-border) !important; }
+  .branch-switcher .branch-name { color: var(--on-surface-dim) !important; }
+  .sidebar-item { color: #aeb9cc !important; }
+  .sidebar-item:hover, .sidebar-item--active { background: var(--surface-hover) !important; }
+  .sidebar-group-header { color: #c4cde0 !important; }
+  .sidebar-group-header:hover,
+  .sidebar-group-header.q-expansion-item--expanded { background: var(--surface-hover) !important; }
+  .sidebar-group-header .q-icon { color: var(--on-surface-dim) !important; }
+}
+
+// A couple of Tailwind-ish helpers the legacy templates reference
+.transition { transition-property: all; }
+.duration-300 { transition-duration: 300ms; }
+.duration-500 { transition-duration: 500ms; }
+.ease-in-out { transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+.transform { transform: translateZ(0); }
+.hover\:scale-105:hover { transform: scale(1.05); }
+.hover\:translate-x-1:hover { transform: translateX(0.25rem); }
+.w-full { width: 100%; }
+.full-w { width: 100%; }
+
+// ── Theme helpers — everything tracks the primary brand colour ───────────────
+// Use `primary` for accents and these soft tints for light backgrounds
+// (they replace the old hard-coded light backgrounds). Change $primary in
+// quasar.variables.scss and the whole app re-themes.
+.bg-theme-soft {
+  background: rgba(25, 118, 210, 0.08) !important;                       // fallback
+  background: color-mix(in srgb, var(--q-primary) 9%, #fff) !important;
+}
+.bg-theme-softer {
+  background: rgba(25, 118, 210, 0.04) !important;
+  background: color-mix(in srgb, var(--q-primary) 5%, #fff) !important;
+}
+.text-theme { color: var(--q-primary) !important; }
+
+// Table header text follows the theme: dark text in light mode,
+// light text in dark mode (both come from the surface variables).
+.q-table .dt-head-th,
+.bg-theme-soft th {
+  color: var(--on-surface-dim, #5f7387) !important;
+  font-weight: 700;
+}
+.border-theme {
+  border-color: color-mix(in srgb, var(--q-primary) 30%, #fff) !important;
+}
+
+// Dashboard-style stagger for stat cards everywhere: each card in a row
+// enters 70ms after the one before it (entrance keyframes live in StatCard).
+@for $i from 1 through 8 {
+  .row > *:nth-child(#{$i}) .stat-card {
+    animation-delay: #{($i - 1) * 70}ms;
+  }
+}
+
+// ── Mobile: trim the compounding page padding ─────────────────────────────
+// PageBackground (q-ma-sm + q-pa-sm) + each page's inner .row.q-pa-sm + card
+// padding stack up to ~48px of wasted width on a phone. Tighten on xs screens.
+@media (max-width: 599px) {
+  // Only trim horizontal padding — never padding-top: Quasar sets that inline to
+  // offset the fixed header, and zeroing it hides page content behind the header.
+  .q-page-container { padding-left: 0 !important; padding-right: 0 !important; }
+  .three_d_new.q-ma-sm { margin: 4px !important; }
+  .three_d_new.q-pa-sm { padding: 6px !important; }
+  .my_radio_less.q-pa-sm,
+  .row.q-pa-sm { padding: 3px !important; }
+  // Card bodies and headers are roomy for desktop; snug them on mobile.
+  .q-card__section { padding: 10px 12px !important; }
+  .q-tab-panel { padding: 10px !important; }
+  // Hero/panel blocks used across the dashboards.
+  .proj-hero__bar, .sc-hero__bar, .emp-hero__bar, .ox-hero__bar, .hx-hero__bar {
+    padding: 12px 13px !important;
+  }
+  // Floating pill nav hugs the edges on small screens.
+  .dash-nav { padding: 4px 6px !important; gap: 2px !important; }
+  .dash-pill { padding: 5px 8px !important; }
+}
+
+/* ── Toasts: soft, rounded, elevated (bottom-centre) ─────────────────────── */
+.app-toast.q-notification {
+  border-radius: 14px;
+  box-shadow: 0 12px 34px -10px rgba(15, 23, 42, 0.45);
+  padding: 10px 14px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  backdrop-filter: blur(2px);
+}
+.app-toast .q-notification__message { font-size: 13.5px; }
+.app-toast .q-notification__icon { font-size: 22px; }
+@media (max-width: 599px) {
+  .app-toast.q-notification { border-radius: 12px; margin-bottom: 8px; }
+}

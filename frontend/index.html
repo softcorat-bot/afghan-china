@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+  <head>
+    <title><%= productName %></title>
+
+    <meta charset="utf-8" />
+    <meta name="description" content="<%= productDescription %>" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta
+      name="viewport"
+      content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width<% if (ctx.mode.cordova || ctx.mode.capacitor) { %>, viewport-fit=cover<% } %>"
+    />
+    <!--
+      `https:` is in connect-src and img-src because a hosted install serves the
+      SPA and the API from two different names (shop.example.com talking to
+      api.example.com), and product photos are served by the API host too.
+      Without it the browser blocks every request the moment the app leaves
+      localhost. Electron keeps the explicit localhost entries it needs.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' file:; script-src 'self' file:; style-src 'self' 'unsafe-inline' file:; connect-src 'self' https: http://127.0.0.1:* http://localhost:* https://*.tile.openstreetmap.org https://server.arcgisonline.com https://*.arcgisonline.com https://*.basemaps.cartocdn.com<% if (ctx.dev) { %> ws://localhost:* ws://127.0.0.1:*<% } %>; font-src 'self' file: data:; img-src 'self' https: file: data: blob: http://127.0.0.1:* http://localhost:* https://*.tile.openstreetmap.org https://server.arcgisonline.com https://*.arcgisonline.com https://*.basemaps.cartocdn.com; frame-src 'self' https://maps.google.com https://www.google.com https://www.openstreetmap.org;"
+    />
+
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="128x128"
+      href="icons/favicon-128x128.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="96x96"
+      href="icons/favicon-96x96.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="icons/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="icons/favicon-16x16.png"
+    />
+    <link rel="icon" type="image/ico" href="favicon.ico" />
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="icons/favicon-128x128.png">
+    <meta name="theme-color" content="#123A66">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Afghan China MIS">
+  </head>
+  <body>
+    <!--
+      Deployment config, loaded before the app. It is a plain file in the
+      upload, so the API address can be changed on the server with a text
+      editor — no Node, no rebuild. See public/config.js.
+    -->
+    <script src="config.js"></script>
+    <!-- quasar:entry-point -->
+  </body>
+</html>

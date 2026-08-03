@@ -1,0 +1,15 @@
+# https://pnpm.io/settings
+
+# Disable the supply-chain minimumReleaseAge policy (blocks recently-published
+# packages) and the pre-run dependency status check. pnpm v11 reads these here.
+minimumReleaseAge: 0
+verifyDepsBeforeRun: false
+
+allowBuilds:
+  '@parcel/watcher': true
+  core-js: true
+  electron-winstaller: true
+  esbuild: true
+  lightningcss: true
+  rolldown: true
+  unrs-resolver: true

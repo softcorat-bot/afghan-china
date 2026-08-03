@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 500" width="450" height="500">
+  <!-- Afghan China Shopping Center — emblem variant for dark backgrounds.
+       Same artwork as ac-logo.svg with a transparent ground and warmed
+       inks so every stroke reads over navy. No white plate. -->
+  <defs>
+    <linearGradient id="acGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD97A"/>
+      <stop offset="55%" stop-color="#F5B41A"/>
+      <stop offset="100%" stop-color="#D9930C"/>
+    </linearGradient>
+    <linearGradient id="acRed" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF6A5C"/>
+      <stop offset="60%" stop-color="#F03A2C"/>
+      <stop offset="100%" stop-color="#D42B1E"/>
+    </linearGradient>
+    <linearGradient id="acRule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F5B41A" stop-opacity="0"/>
+      <stop offset="18%" stop-color="#F5B41A" stop-opacity="0.95"/>
+      <stop offset="82%" stop-color="#F5B41A" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#F5B41A" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="acGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#acGlow)">
+    <!-- AC letters: gold C behind, red A in front -->
+    <text x="262" y="150" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic"
+      font-size="148" fill="url(#acGold)" text-anchor="middle">C</text>
+    <text x="196" y="142" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic"
+      font-size="150" fill="url(#acRed)" text-anchor="middle">A</text>
+
+    <!-- cart -->
+    <g fill="none" stroke="url(#acGold)" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M52 128 L92 150 L112 172" stroke-width="16"/>
+      <rect x="36" y="112" width="26" height="20" rx="4" fill="url(#acGold)" stroke="none"/>
+      <path d="M100 170 H352 L322 316 H128 Z" stroke-width="15"/>
+      <path d="M141 178 L152 308 M186 178 L192 308 M228 178 L228 308 M269 178 L264 308 M311 178 L302 308" stroke-width="9"/>
+      <path d="M110 218 H342 M119 262 H332" stroke-width="9"/>
+    </g>
+    <!-- wheels -->
+    <g stroke="url(#acGold)" fill="none" stroke-width="15">
+      <circle cx="165" cy="356" r="27"/>
+      <circle cx="290" cy="356" r="27"/>
+    </g>
+    <g fill="url(#acGold)">
+      <circle cx="165" cy="356" r="9"/>
+      <circle cx="290" cy="356" r="9"/>
+    </g>
+  </g>
+
+  <!-- name block: gold rules, cream Chinese, gold Dari -->
+  <rect x="62" y="402" width="326" height="3" fill="url(#acRule)"/>
+  <text x="225" y="438" font-family="'Noto Sans CJK SC','Microsoft YaHei','PingFang SC',sans-serif"
+    font-weight="700" font-size="27" fill="#FFEBC2" text-anchor="middle">阿富汗中国百货购物中心</text>
+  <text x="225" y="477" font-family="Tahoma,'Noto Naskh Arabic',Arial,sans-serif" font-weight="800"
+    font-size="27" fill="url(#acGold)" text-anchor="middle" direction="rtl">مرکز خرید افغان چین</text>
+  <rect x="62" y="490" width="326" height="3" fill="url(#acRule)"/>
+</svg>

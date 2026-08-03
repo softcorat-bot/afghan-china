@@ -1,0 +1,57 @@
+{
+  "name": "afghan-china-mis-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Afghan China Shopping Center MIS frontend (Quasar 2 + Vue 3)",
+  "keywords": [
+    "quasar",
+    "quasar-app",
+    "quasar-app-vite",
+    "quasar-cli",
+    "vite",
+    "vue",
+    "vuejs"
+  ],
+  "author": "Claude <noreply@anthropic.com>",
+  "type": "module",
+  "scripts": {
+    "lint": "oxfmt && oxlint --fix",
+    "lint:check": "oxfmt --check && oxlint",
+    "dev": "quasar dev",
+    "build": "quasar build",
+    "postinstall": "quasar prepare --silent"
+  },
+  "dependencies": {
+    "@quasar/extras": "^2.0.0",
+    "axios": "^1.18.0",
+    "dexie": "^4.4.4",
+    "html2canvas": "^1.4.1",
+    "jsbarcode": "^3.12.3",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "leaflet": "^1.9.4",
+    "pinia": "^3.0.4",
+    "print-js": "^1.6.0",
+    "quasar": "2.20.3",
+    "vue": "^3.5.22",
+    "vue-router": "^5.0.6",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@quasar/app-vite": "3.0.0-rc.5",
+    "autoprefixer": "^10.4.27",
+    "oxfmt": "^0.x",
+    "oxlint": "^1.x",
+    "postcss": "^8.5.8",
+    "vite": "^7.1.0"
+  },
+  "engines": {
+    "node": ">= 26 || ^24 || ^22.12"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "^7.1.0"
+    }
+  },
+  "productName": "Afghan China MIS"
+}

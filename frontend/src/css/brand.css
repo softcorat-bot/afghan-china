@@ -1,0 +1,861 @@
+
+.btn_add {
+  color: #4cc5cd;
+}
+
+.btn_back {
+  color: #e07c8e;
+}
+
+.btn_print {
+  color: #4a4a4a;
+}
+
+.btn_pdf {
+  color: #c8abdb;
+}
+
+.btn_excel {
+  color: #a7c67a;
+}
+
+.btn_upload {
+  color: #1d9882;
+}
+
+.btn_email {
+  color: #e06e66;
+}
+
+.btn_csv {
+  color: #0cb163;
+}
+
+.btn_whatsapp {
+  color: #4caf50;
+}
+
+.btn_advance_search {
+  color: #5891aa;
+}
+
+.header_color th {
+  color: white !important;
+  font-size: 14px !important;
+}
+
+.three_d {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.19), 0 1px 6px rgba(0, 0, 0, 0.11) !important;
+  /* box-shadow: rgb(0 0 0 12%) 0px 4px 16px !important; */
+}
+.three_d_inner {
+    box-shadow: inset 0px 0 35px 0 #c7c7c7;
+}
+.three_d_high {
+  box-shadow: 0 16px 90px rgba(49, 75, 146, 0.34),
+  0 16px 40px rgba(45, 50, 119, 0.3) !important;
+}
+
+.three_d_plan{
+  box-shadow: rgba(17, 17, 26, 0.05) 0px 1px 0px, rgba(17, 17, 26, 0.1) 0px 0px 8px;
+}
+
+.three_d_less {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+.three_d_new {
+  box-shadow: 0 14px 18px rgba(0, 0, 0, 0.1), 0 11px 80px rgba(0, 0, 0, 0.1) !important;
+}
+.three_d_new_red {
+  box-shadow: 0 14px 30px rgba(255, 0, 0, 0.1), 0 11px 80px rgba(255, 0, 0, 0.34) !important;
+}
+.three_d_new_blue {
+  box-shadow: 0 14px 30px rgba(0, 101, 255, 0.1), 0 11px 80px rgba(0, 114, 160, 0.34) !important;
+}
+.three_d_new_cyan {
+  box-shadow: 0 14px 30px rgba(0, 255, 255, 0.1), 0 11px 80px rgba(0, 184, 181, 0.34) !important;
+}
+.three_d_new_green {
+  box-shadow: 0 14px 30px rgba(0, 255, 95, 0.1), 0 11px 80px rgba(0, 255, 92, 0.34) !important;
+}
+.three_d_new_yellow {
+  box-shadow: 0 14px 30px rgba(255, 102, 0, 0.1), 0 11px 80px rgba(255, 221, 0, 0.34) !important;
+}
+
+/* Two layers rather than one very diffuse blur: a tighter near-shadow gives the
+   card something to visually rest on, the wide soft one is the ambient glow
+   the original single-layer version was reaching for. Same navy hue, more
+   premium falloff — this is the "VIP" elevation used across the app wherever
+   a card should read as the important surface on the page. */
+.three_d_latest {
+  box-shadow: 0 10px 28px -12px rgba(1, 64, 139, 0.28), 0 24px 60px -20px rgba(1, 64, 139, 0.22);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.three_d_nice{
+  box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
+}
+.three_d_smooth{
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 10px 50px;
+}
+
+.customCard{
+  box-shadow: rgb(90 114 123 / 11%) 0px 7px 30px 0px;
+  border-radius: 7px;
+  background: var(--surface-card);
+  /* border: solid white 3px; */
+}
+.background_new{
+  background-color: #f5f8fe;
+}
+
+.my_radio {
+  border-radius: 0.9rem !important;
+  -webkit-border-radius:;
+  -moz-border-radius:;
+  -ms-border-radius:;
+  -o-border-radius:;
+}
+.my_radio_high {
+  border-radius: 5rem !important;
+}
+
+.my_radio_less {
+  border-radius: 0.5rem !important;
+}
+
+.my_radio_most_less {
+  border-radius: 0.3rem !important;
+  -webkit-border-radius:;
+  -moz-border-radius:;
+  -ms-border-radius:;
+  -o-border-radius:;
+}
+
+.my_radio_less_top_left {
+  border-top-left-radius: 0.5rem !important;
+}
+.my_radio_less_top_right {
+  border-top-right-radius: 0.5rem !important;
+}
+.my_radio_less_bottom_left {
+  border-bottom-left-radius: 0.5rem !important;
+}
+.my_radio_less_bottom_right {
+  border-bottom-right-radius: 0.5rem !important;
+}
+.my_radio_less_right {
+  border-top-right-radius: 0.3rem !important;
+  border-bottom-right-radius: 0.3rem !important;
+}
+
+.border_style {
+  padding-left: 1%;
+  padding-right: 1%;
+  background-color: var(--surface-card);
+}
+
+.my_class {
+  border-radius: 50%;
+}
+
+.btn-circle {
+  width: 30px;
+  height: 30px;
+  text-align: center;
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 1.428571429;
+  border-radius: 15px;
+}
+
+.btn-circle.btn-lg {
+  width: 50px;
+  height: 50px;
+  padding: 10px 16px;
+  font-size: 18px;
+  line-height: 1.33;
+  border-radius: 25px;
+}
+
+.btn-circle.btn-xl {
+  width: 70px;
+  height: 70px;
+  padding: 10px 16px;
+  font-size: 24px;
+  line-height: 1.33;
+  border-radius: 35px;
+}
+
+.my_margin_top_one {
+  margin-top: 1% !important;
+}
+
+.my_header_h {
+  margin: 1% !important;
+  color: white !important;
+}
+
+.margin_bottom_3 {
+  margin-bottom: 3%;
+}
+
+.margin_left_2 {
+  margin-left: 2%;
+}
+
+.margin_left_4 {
+  margin-left: 4%;
+}
+
+.margin_1 {
+  margin: 1%;
+}
+
+.margin_bottom_10px {
+  margin-bottom: 10px !important;
+}
+
+/*Fazil 25 October*/
+
+.margin_2 {
+  margin: 2% !important;
+}
+
+.icon-bgcolor {
+  color: rgb(255, 255, 255);
+  background-color: rgb(57, 179, 215);
+  border-color: rgb(38, 154, 188);
+}
+
+.form-group a i {
+  font-family: FontAwesome;
+  margin: 0 auto;
+  font-size: 5rem;
+  font-style: normal;
+}
+
+.min-container .card-panel form .fa {
+  top: 13px;
+  right: 1rem;
+}
+
+/* Media Queries */
+
+@media (min-width: 768px) {
+  .min-container {
+    max-width: 650px;
+  }
+}
+
+.min-container {
+  margin: 0 auto;
+}
+
+.icon-color-info {
+  color: #01b8ff;
+}
+
+.bg-maroon {
+  background-color: #dc3545 !important;
+}
+
+.master-font {
+  font-size: 20px;
+}
+
+.my_border_grey {
+  border: 3px solid #bdbdbd;
+}
+.my_border_dark_grey {
+  border: 3px solid #383636;
+}
+.my_date_border{
+  border: 1px solid #afadad;
+}
+.my_border_grey_right {
+  border-right: 1px solid #afadad;
+}
+.my_border_grey_left {
+  border-left: 1px solid #afadad;
+}
+.my_border_grey_top {
+  border-top: 1px solid #afadad;
+}
+.my_border_grey_bottom {
+  border-bottom: 1px solid #afadad;
+}
+.my_border_grey_less {
+  border: 1px solid #bdbdbd;
+}
+
+.my_border {
+  /*border: 3px solid #0288d1;*/
+  border: 3px solid #3ebaff;
+}
+
+.my_border_iphone{
+  border: 4px solid #494949;
+}
+
+.my_border_white {
+  border: 2px solid white;
+}
+.my_border_white_less {
+  border: 1px solid white;
+}
+
+.my_border_white_right {
+  border-right: 2px solid white;
+}
+
+.my_border_white_left {
+  border-left: 2px solid white;
+}
+
+.my_border_top {
+  border-top: 3px solid #3ebaff;
+}
+
+.my_border_top_less {
+  border-top: 2px solid #3ebaff;
+}
+
+.my_border_less {
+  border: 2px solid #3ebaff;
+}
+
+.my_border_bottom {
+  border-bottom: 3px solid #3ebaff;
+}
+
+.my_border_bottom2 {
+  border-bottom: 2px solid #3ebaff;
+}
+
+.my_border_right {
+  border-right: 3px solid #3ebaff;
+}
+
+.my_border_left {
+  border-left: 3px solid #3ebaff;
+}
+
+.my_border_black_left {
+  border-left: 3px solid black;
+}
+
+.my_border_black_top {
+  border-top: 3px solid black;
+}
+
+.my_border_black_bottom {
+  border-bottom: 3px solid black;
+}
+
+.my_border_black_right {
+  border-right: 3px solid black;
+}
+
+.my_border_black_left {
+  border-left: 3px solid black;
+}
+
+.my_border_cyan_less {
+  border: 2px solid #00bcd4;
+}
+
+.my_border_teal_less {
+  border: 2px solid #009688;
+}
+
+.my_border_green_less {
+  border: 2px solid #4caf50;
+}
+
+.my_border_orange_less {
+  border: 2px solid #ff5722;
+}
+
+.my_transparent3 {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.my_transparent_white {
+  background: rgba(255, 255, 255, 0.7);
+}
+.my_transparent_zero {
+  background: rgba(0, 0, 0, 0);
+}
+.my_transparent5 {
+  background: rgba(0, 0, 0, 0.5);
+}
+.my_transparent_blue {
+  background: rgba(0, 141, 210, 0.8);
+}
+
+/*Spin Animation Start*/
+.spin:hover {
+  animation-name: spin;
+  animation-duration: 200ms;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+.spin:focus {
+  animation-name: spin;
+  animation-duration: 200ms;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/*Spin Animation End*/
+
+/*Emran Khan MSOFT, [15.03.21 15:26]*/
+/*Spin Animation End*/
+
+/*Start Control Panel Design*/
+
+.doc-card-title {
+  margin-left: -27px;
+  padding: 2px 10px 2px 24px;
+  background: #3ebaff;
+  color: #ffffff;
+  position: relative;
+  border-radius: 3px 5px 5px 0;
+  width: 120px;
+  margin-top: -29px;
+}
+
+.doc-card-title:after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 0;
+  height: 0;
+  border: 0 solid transparent;
+  border-top-color: #bebebe;
+  border-width: 9px 0 0 11px;
+}
+
+.doc-card2-title {
+  margin-left: -27px;
+  color: #ffffff;
+  position: relative;
+  border-radius: 3px 5px 5px 0;
+  width: 130px;
+}
+
+.doc-card2-title:after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 0;
+  height: 0;
+  border: 0 solid transparent;
+  border-top-color: #bebebe;
+  border-width: 9px 0 0 11px;
+}
+
+.activity-block .task-list li {
+  padding-left: 10px;
+}
+
+.activity-block .task-list {
+  padding-top: 0;
+}
+
+.activity-block h6 {
+  margin-bottom: 0px;
+}
+
+.activity-block .task-list:after {
+  left: 5px;
+  z-index: 0;
+}
+
+.activity-block .task-list li .task-icon {
+  top: 9px;
+  left: 0px;
+  width: 12px;
+  height: 12px;
+}
+
+.task-list {
+  list-style: none;
+  position: relative;
+  margin: 0;
+  padding: 0px 0 0;
+}
+
+.task-list:after {
+  content: "";
+  position: absolute;
+  background: #e1e6f1;
+  height: 100%;
+  width: 1px;
+  top: 0;
+  left: 30px;
+  z-index: 1;
+}
+
+.task-list li {
+  margin-bottom: 3px;
+  padding-left: 55px;
+  position: relative;
+}
+
+.task-list li:last-child {
+  margin-bottom: 0;
+}
+
+.task-list li .task-icon {
+  position: absolute;
+  left: 20px;
+  top: 13px;
+  border-radius: 50%;
+  padding: 2px;
+  width: 17px;
+  height: 17px;
+  z-index: 24;
+  /* margin-top: 4px; */
+}
+
+.my_cascade {
+  margin-top: -35px;
+}
+
+.blockquote {
+  padding: 0.5rem 1rem;
+  border-left: 0.15rem solid #bdbdbd;
+}
+
+.my_pointer {
+  cursor: pointer;
+}
+
+.my_avatar_cascade {
+  margin-top: -100px;
+}
+
+/*End Control Panel Design*/
+
+.slider_fix {
+  height: 100%;
+}
+
+/*my_width Start*/
+
+.my_width1 {
+  width: 1%;
+}
+.my_width3 {
+  width: 3%;
+}
+.my_width5 {
+  width: 5%;
+}
+.my_width9 {
+  width: 9%;
+}
+.my_width10 {
+  width: 10%;
+}
+.my_width20 {
+  width: 20%;
+}
+.my_width25 {
+  width: 25%;
+}
+.my_width30 {
+  width: 30%;
+}
+.my_width40 {
+  width: 40%;
+}
+.my_width50 {
+  width: 50%;
+}
+.my_width60 {
+  width: 60%;
+}
+.my_width70 {
+  width: 70%;
+}
+.my_width80 {
+  width: 80%;
+}
+.my_width90 {
+  width: 90%;
+}
+.my_width100 {
+  width: 100%;
+}
+
+/*my_width End*/
+
+.my_peach_gradient {
+  background: linear-gradient(40deg, #af5a21, #7e0a0a) !important;
+}
+.my_aqua_gradient {
+  background: linear-gradient(175deg, #0084ff, #ffffff) !important;
+}
+.my_blue_gradient {
+  background: linear-gradient(40deg, #40c4ff, #1c2a48) !important;
+}
+.my_green_gradient {
+  background: linear-gradient(40deg, #bdba2f, #085829) !important;
+}
+.my_red_gradient {
+  background: linear-gradient(40deg, #23178b, #dd1b1b) !important;
+}
+.my_grey_gradient {
+  background: linear-gradient(40deg, #ffffff, #b4afaf) !important;
+}
+.vision_gradient {
+  background: linear-gradient(40deg, #00b5ff, #003772) !important;
+}
+.info_modal_width_xs{
+  width: 25vw;
+}
+.info_modal_width_sm{
+  width: 35vw;
+}
+.info_modal_width_user{
+  width: 50vw;
+}
+.info_modal_width_md{
+  width: 65vw;
+}
+.info_modal_width_lg{
+  width: 80vw;
+}
+.info_modal_width_full{
+  width: 100vw;
+}
+.notify_color_negative{
+  background-color: #d4445d;
+}
+.avatar {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  background-color: #8760fb;
+}
+.avatar_status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 24px;
+
+}
+.avatar_status::after {
+  content: '';
+  position: absolute;
+  bottom: 0px;
+  right: 25px;
+  width: 14px;
+  height: 14px;
+  background-color: #99a6b7;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
+  border-radius: 100%;
+}
+.avatar_status.online::after {
+  background-color: #1bbd29;
+}
+.avatar_status.offline::after {
+  background-color: #44484c;
+}
+.my_card{
+  box-shadow: 0 4px 10px 1px rgba(99, 98, 98, 0.19) ;
+  border-radius: 10px;
+}
+.item_scale_1:hover{
+  color:#145EA8;
+  border-radius: 10px;
+
+}
+.new_card{
+  border-radius: 12px;
+  box-shadow: 0 6px 10px -4px rgb(0 0 0 / 15%);
+  background-color: #FFFFFF;
+  color: #252422;
+  margin-bottom: 20px;
+  position: relative;
+  border: 0 none;
+  transition: transform 300ms cubic-bezier(0.34, 2, 0.6, 1), box-shadow 200ms ease;
+}
+
+
+
+/*Bootstrap*/
+.my-form-control {
+  display: block;
+  width: 100%;
+  height: calc(0.8em + 0.75rem + 2px);
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #495057;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.my-form-control-square {
+  display: block;
+  width: 100%;
+  height: calc(0.8em + 0.75rem + 2px);
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #495057;
+  background-color: #fff;
+  background-clip: padding-box;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+.vs__open-indicator {
+  display: none !important;
+}
+.my-inverted .q-if-inner input {
+  color: red !important;
+}
+
+.t_sales {
+  position: sticky;
+  top: 0rem;
+  background: var(--surface-card);
+}
+
+
+/* Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/*::-webkit-scrollbar {*/
+/*  width: 10px;*/
+/*  height: 30px;*/
+
+/*}*/
+
+/*!* Track *!*/
+/*::-webkit-scrollbar-track {*/
+/*  !*box-shadow: inset 0 0 5px grey;*!*/
+/*  border-radius: 5px;*/
+/*}*/
+
+/*!* Handle *!*/
+/*::-webkit-scrollbar-thumb {*/
+/*  background: #4fc3f7;*/
+/*  border-radius: 8px;*/
+/*}
+
+/*!* Handle on hover *!*/
+/*::-webkit-scrollbar-thumb:hover {*/
+/*  background: #49dabd;*/
+/*}*/
+
+/** {*/
+/*  scrollbar-width: thin;*/
+/*  scrollbar-color: red orange;*/
+/*}*/
+
+/* Works on Chrome, Edge, and Safari */
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+*::-webkit-scrollbar-track {
+  /* background: #b3e5fc; */
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(289deg, rgba(33, 87, 244, 0.87) 0%, rgb(25, 199, 218) 100%); border-radius: 8px; 
+  border-radius: 10px;
+  border: none;
+}
+
+
+@media screen and (max-width: 650px) {
+  .info_modal_width_xs{
+    width: 100vw;
+  }
+  .info_modal_width_sm{
+    width: 100vw;
+  }
+  .info_modal_width_user{
+    width: 100vw;
+  }
+  .info_modal_width_md{
+    width: 100vw;
+  }
+  .info_modal_width_lg{
+    width: 100vw;
+  }
+  
+}
+
+
+@media screen and (max-width: 900px) and (min-width: 650px) {
+  .info_modal_width_xs{
+    width: 80vw;
+  }
+  .info_modal_width_sm{
+    width: 80vw;
+  }
+  .info_modal_width_user{
+    width: 80vw;
+  }
+  .info_modal_width_md{
+    width: 80vw;
+  }
+  .info_modal_width_lg{
+    width: 80vw;
+  }
+  
+}
+
+
+
+
+
+
+/* INPUT SIZE BORDERLESS AND SQUARE */
+.q-field--square.q-field--borderless {
+  height: 2.1em;
+}
+
+
+
+.three_d_latest.my_radio_less.from-white.to-green-200{
+  overflow-x: hidden;
+}
