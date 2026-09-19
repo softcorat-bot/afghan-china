@@ -28,3 +28,6 @@ backend/bootstrap/cache/*.php
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Offline POS till: runtime data (local database, device token, backups)
+offline/data/

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SoftCora POS — Offline</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">SC</span>
+    <div>
+      <strong>SoftCora POS</strong>
+      <small id="deviceLabel">offline till</small>
+    </div>
+  </div>
+
+  <!-- The sync control: always visible, always honest. -->
+  <div class="sync-control" id="syncControl">
+    <span class="dot" id="syncDot"></span>
+    <div class="sync-text">
+      <strong id="syncState">Offline</strong>
+      <small id="syncDetail">no sync yet</small>
+    </div>
+    <button id="syncNow" class="btn primary">Sync Now</button>
+  </div>
+
+  <nav class="tabs">
+    <button data-view="sell" class="active">Sell</button>
+    <button data-view="sales">Sales &amp; Returns</button>
+    <button data-view="drawer">Drawer</button>
+    <button data-view="sync">Synchronization</button>
+    <button data-view="conflicts">Conflicts <span id="conflictBadge" class="badge hidden">0</span></button>
+    <button data-view="reports">Reports</button>
+    <button data-view="settings">Settings</button>
+  </nav>
+</header>
+
+<main>
+  <!-- Sell -->
+  <section id="view-sell" class="view active">
+    <div class="sell-grid">
+      <div class="panel">
+        <div class="row">
+          <input id="search" placeholder="Search products, SKU or name…" autocomplete="off" />
+          <input id="barcode" placeholder="Scan barcode" autocomplete="off" />
+          <button id="newProduct" class="btn ghost" title="Create an item at the till">+ Product</button>
+        </div>
+        <div id="productGrid" class="product-grid"></div>
+      </div>
+
+      <div class="panel cart">
+        <div class="row">
+          <input id="customerSearch" placeholder="Customer name or phone" autocomplete="off" />
+          <button id="addCustomer" class="btn ghost">+ New</button>
+        </div>
+        <div id="customerChip" class="chip hidden"></div>
+
+        <div id="cartLines" class="cart-lines"><p class="muted">Cart is empty.</p></div>
+
+        <div class="totals">
+          <div><span>Subtotal</span><b id="tSubtotal">0.00</b></div>
+          <div><span>Discount</span><input id="billDiscount" type="number" min="0" step="0.01" value="0" /></div>
+          <div><span>Tax</span><b id="tTax">0.00</b></div>
+          <div class="grand"><span>Total</span><b id="tTotal">0.00</b></div>
+        </div>
+
+        <div class="row">
+          <select id="payMethod">
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="mobile">Mobile money</option>
+            <option value="credit">Credit</option>
+          </select>
+          <input id="payAmount" type="number" min="0" step="0.01" placeholder="Amount" />
+        </div>
+        <div id="payments" class="payments"></div>
+
+        <button id="completeSale" class="btn primary wide">Complete sale</button>
+        <p id="sellMessage" class="message"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sales & returns -->
+  <section id="view-sales" class="view">
+    <div class="panel">
+      <div class="row">
+        <input id="receiptLookup" placeholder="Receipt number or scan" />
+        <button id="findReceipt" class="btn">Find</button>
+      </div>
+      <div id="receiptDetail"></div>
+    </div>
+  </section>
+
+  <!-- Drawer -->
+  <section id="view-drawer" class="view">
+    <div class="panel" id="drawerPanel"></div>
+  </section>
+
+  <!-- Synchronization -->
+  <section id="view-sync" class="view">
+    <div class="panel">
+      <h2>Synchronization</h2>
+      <div id="syncSummary" class="summary-grid"></div>
+      <div class="row">
+        <button id="syncNow2" class="btn primary">Sync Now</button>
+        <button id="retryFailed" class="btn">Retry failed</button>
+        <button id="probe" class="btn ghost">Check connection</button>
+      </div>
+      <div id="progress" class="progress hidden"><div id="progressBar"></div><span id="progressText"></span></div>
+      <h3>Outbox</h3>
+      <div id="outbox"></div>
+      <h3>Recent syncs</h3>
+      <div id="syncLog"></div>
+    </div>
+  </section>
+
+  <!-- Conflicts -->
+  <section id="view-conflicts" class="view">
+    <div class="panel">
+      <h2>Sync Conflict Center</h2>
+      <p class="muted">Nothing is overwritten silently. An administrator decides.</p>
+      <div id="conflictList"></div>
+    </div>
+  </section>
+
+  <!-- Reports -->
+  <section id="view-reports" class="view">
+    <div class="panel">
+      <h2>Local reports</h2>
+      <div class="row">
+        <label>From <input id="reportFrom" type="date" /></label>
+        <label>To <input id="reportTo" type="date" /></label>
+        <button id="runReport" class="btn">Run</button>
+      </div>
+      <div id="reportOut"></div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="view-settings" class="view">
+    <div class="panel">
+      <h2>This till</h2>
+      <div id="devicePanel"></div>
+      <h3>Settings</h3>
+      <div id="settingsPanel"></div>
+      <h3>Backup</h3>
+      <div class="row">
+        <button id="backupNow" class="btn">Create backup</button>
+      </div>
+      <p id="backupMessage" class="message"></p>
+    </div>
+  </section>
+</main>
+
+<div id="loginOverlay" class="overlay">
+  <form id="loginForm" class="card">
+    <h2>Sign in to this till</h2>
+    <p class="muted">Works with no internet: credentials are verified on this machine against hashes.</p>
+    <input id="loginUser" placeholder="Email or username" autocomplete="username" />
+    <input id="loginSecret" type="password" placeholder="Password or PIN" autocomplete="current-password" />
+    <label class="check"><input id="loginPin" type="checkbox" checked /> This is a PIN</label>
+    <button class="btn primary wide">Sign in</button>
+    <p id="loginMessage" class="message"></p>
+  </form>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
