@@ -19,6 +19,11 @@ $app = Application::configure(basePath: $basePath)
             'branch' => \App\Http\Middleware\SetBranch::class,
             'super_admin' => \App\Http\Middleware\SuperAdmin::class,
             'platform_owner' => \App\Http\Middleware\PlatformOwner::class,
+            // Offline POS: the installation authenticates with its own device
+            // token (never a user password), and the fleet's admin surface is
+            // guarded separately from the rest of the tenant app.
+            'device_auth' => \App\Http\Middleware\DeviceAuth::class,
+            'sync_admin' => \App\Http\Middleware\SyncAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

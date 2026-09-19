@@ -9,6 +9,9 @@ use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\HardwareDeviceController;
 use App\Http\Controllers\Inventory\ExpiryBatchController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Sync\ConflictController;
+use App\Http\Controllers\Sync\DeviceAdminController;
+use App\Http\Controllers\Sync\SyncLogController;
 use App\Http\Controllers\POS\CounterEndOfDayController;
 use App\Http\Controllers\POS\OrderQueueController;
 use App\Http\Controllers\Role\RoleController;
@@ -343,8 +346,64 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('queue/{order}/print', [\App\Http\Controllers\POS\OrderQueueController::class, 'print']);
         });
 
-        // Offline sync engine (device IndexedDB <-> central DB)
-        Route::post('sync/pull', [\App\Http\Controllers\Sync\SyncController::class, 'pull']);
-        Route::post('sync/push', [\App\Http\Controllers\Sync\SyncController::class, 'push']);
+        // ── Offline POS fleet: Settings → Devices ──
+        // Authorize a Windows till, watch it, and cut it off if it is lost.
+        Route::prefix('devices')->group(function () {
+            Route::get('/', [DeviceAdminController::class, 'index'])->middleware('sync_admin:device-list,manage-devices');
+            Route::post('/', [DeviceAdminController::class, 'store'])->middleware('sync_admin:manage-devices');
+            Route::get('{device}', [DeviceAdminController::class, 'show'])->middleware('sync_admin:device-list,device-show,manage-devices');
+            Route::put('{device}', [DeviceAdminController::class, 'update'])->middleware('sync_admin:manage-devices');
+            Route::post('{device}/enable', [DeviceAdminController::class, 'enable'])->middleware('sync_admin:manage-devices');
+            Route::post('{device}/disable', [DeviceAdminController::class, 'disable'])->middleware('sync_admin:manage-devices');
+            Route::post('{device}/revoke', [DeviceAdminController::class, 'revoke'])->middleware('sync_admin:manage-devices');
+            Route::post('{device}/reauthorize', [DeviceAdminController::class, 'reauthorize'])->middleware('sync_admin:manage-devices');
+            Route::delete('{device}', [DeviceAdminController::class, 'destroy'])->middleware('sync_admin:manage-devices');
+        });
+
+        // ── Sync Conflict Center: Settings → Synchronization → Conflicts ──
+        Route::prefix('sync-conflicts')->group(function () {
+            Route::get('/', [ConflictController::class, 'index'])->middleware('sync_admin:sync-conflict-list,resolve-sync-conflicts');
+            Route::get('pending', [ConflictController::class, 'pending'])->middleware('sync_admin:sync-conflict-list,resolve-sync-conflicts');
+            Route::get('{conflict}', [ConflictController::class, 'show'])->middleware('sync_admin:sync-conflict-list,sync-conflict-show,resolve-sync-conflicts');
+            Route::post('{conflict}/resolve', [ConflictController::class, 'resolve'])->middleware('sync_admin:resolve-sync-conflicts');
+        });
+
+        // ── Synchronization overview: Settings → Synchronization ──
+        Route::prefix('sync')->group(function () {
+            Route::get('overview', [SyncLogController::class, 'overview'])->middleware('sync_admin:sync-log-list,sync-now');
+            Route::get('batches', [SyncLogController::class, 'batches'])->middleware('sync_admin:sync-log-list,sync-now');
+            Route::post('prune', [SyncLogController::class, 'prune'])->middleware('sync_admin:manage-devices');
+        });
     });
 });
+
+/*
+|--------------------------------------------------------------------------
+| Offline POS sync API
+|--------------------------------------------------------------------------
+|
+| What a Windows till talks to when it has no browser and no human: it holds its
+| own device token (issued once, at activation), pushes what it did offline,
+| pulls what changed centrally and acknowledges what it stored.
+|
+| /api/v1/sync/* is the documented surface; the older /api/sync/* paths are
+| registered from the same definition so nothing built against them breaks.
+|
+*/
+$offlineSyncRoutes = function (): void {
+    Route::post('register', [\App\Http\Controllers\Sync\DeviceSyncController::class, 'register'])
+        ->middleware('throttle:20,1');
+
+    Route::middleware('device_auth')->group(function () {
+        Route::match(['get', 'post'], 'status', [\App\Http\Controllers\Sync\SyncController::class, 'status']);
+        Route::post('heartbeat', [\App\Http\Controllers\Sync\SyncController::class, 'heartbeat']);
+        Route::post('push', [\App\Http\Controllers\Sync\SyncController::class, 'push']);
+        Route::match(['get', 'post'], 'pull', [\App\Http\Controllers\Sync\SyncController::class, 'pull']);
+        Route::post('ack', [\App\Http\Controllers\Sync\SyncController::class, 'ack']);
+        Route::get('conflicts', [\App\Http\Controllers\Sync\SyncController::class, 'conflicts']);
+        Route::post('token/rotate', [\App\Http\Controllers\Sync\DeviceSyncController::class, 'rotate']);
+    });
+};
+
+Route::prefix('v1/sync')->group($offlineSyncRoutes);
+Route::prefix('sync')->group($offlineSyncRoutes);
