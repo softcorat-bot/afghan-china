@@ -9,6 +9,7 @@ database engine.
 offline/dist/SoftCora-POS-Setup.exe            24 MB   the installer
 offline/dist/SoftCoraPOS-portable-win64.zip    37 MB   the same till, copy-and-run
 offline/dist/sha256.txt                                checksums of both
+offline/dist/RELEASE-NOTES.md                          this version's notes, values filled in
 ```
 
 Both are produced by `offline/installer/build-windows.sh` and are **not** in
@@ -77,7 +78,28 @@ The script is deliberately loud and fails closed:
    and runs `--cli status`;
 5. assembles the payload and converts every `.cmd`/`.ps1`/`.txt` to CRLF;
 6. packs it with LZMA2 and glues it after the stub and its configuration;
-7. writes the portable zip and `sha256.txt`.
+7. writes the portable zip and `sha256.txt`;
+8. writes `dist/RELEASE-NOTES.md` from `docs/RELEASE-NOTES-<version>.md`, filling in
+   this build's sizes, checksums and commit. The bundle carries a build timestamp, so
+   it is not bit-reproducible and the checksums cannot be maintained by hand; the build
+   fails if the notes ask for a value it does not provide.
+
+## Publishing it as a release
+
+Everything the release needs is in `offline/dist/` after a build:
+
+```bash
+gh release create v1.0.0 \
+  offline/dist/SoftCora-POS-Setup.exe \
+  offline/dist/SoftCoraPOS-portable-win64.zip \
+  offline/dist/sha256.txt \
+  --title "SoftCora POS 1.0.0" \
+  --notes-file offline/dist/RELEASE-NOTES.md
+```
+
+Cut the release from the same build whose checksums the notes carry — rebuilding
+regenerates both. Release assets upload to `uploads.github.com`, which is a
+different host from `api.github.com` and is blocked on some build networks.
 
 Step 4 is the reason the packaging is trustworthy without a Windows machine in
 the loop: the blob, the asset embedding and the entry point are the same bytes
