@@ -283,6 +283,61 @@ cd "$DIST"
 sha256sum SoftCora-POS-Setup.exe SoftCoraPOS-portable-win64.zip > sha256.txt
 sha256sum "$BUILD/$EXE_NAME" > SoftCora-POS.exe.sha256
 
+# ── 9. the release notes the publish step uploads ───────────────────────────
+# The notes live in version control (docs/RELEASE-NOTES-<version>.md, because
+# dist/ is not tracked) and are copied here with this build's own measurements
+# filled in, so a release can be cut straight after a build with:
+#   gh release create v<version> dist/… --notes-file dist/RELEASE-NOTES.md
+# The bundle is not bit-reproducible (esbuild stamps a timestamp into it), so
+# the checksums are substituted rather than maintained by hand.
+VERSION="$(sed -n 's/^SoftCora POS //p' "$INSTALLER/payload/VERSION.txt" | tr -d '\r')"
+NOTES_SRC="$OFFLINE/docs/RELEASE-NOTES-$VERSION.md"
+if [ -f "$NOTES_SRC" ]; then
+  python3 - "$NOTES_SRC" "$DIST" "$PAYLOAD/app/$EXE_NAME" "$OFFLINE" <<'NOTES_PY'
+import hashlib, os, re, subprocess, sys
+
+src, dist, exe, offline = sys.argv[1:5]
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as handle:
+        while chunk := handle.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+def size(path):
+    n = os.path.getsize(path)
+    return f'{n:,} bytes ({n / 1048576:.1f} MiB)'
+
+commit = subprocess.run(['git', '-C', offline, 'rev-parse', '--short', 'HEAD'],
+                        capture_output=True, text=True, check=False).stdout.strip() or 'unknown'
+
+fields = {
+    'SETUP_SHA256': sha256(os.path.join(dist, 'SoftCora-POS-Setup.exe')),
+    'SETUP_SIZE': size(os.path.join(dist, 'SoftCora-POS-Setup.exe')),
+    'ZIP_SHA256': sha256(os.path.join(dist, 'SoftCoraPOS-portable-win64.zip')),
+    'ZIP_SIZE': size(os.path.join(dist, 'SoftCoraPOS-portable-win64.zip')),
+    'EXE_SIZE': f'{os.path.getsize(exe):,}-byte',
+    'COMMIT': commit,
+}
+
+notes = open(src, encoding='utf-8').read()
+for key, value in fields.items():
+    notes = notes.replace('{{' + key + '}}', value)
+
+unfilled = sorted(set(re.findall(r'\{\{(\w+)\}\}', notes)))
+if unfilled:
+    raise SystemExit(f'the release notes ask for values the build does not provide: {unfilled}')
+
+with open(os.path.join(dist, 'RELEASE-NOTES.md'), 'w', encoding='utf-8') as out:
+    out.write(notes)
+print(f'  notes: {len(fields)} values filled in from this build')
+NOTES_PY
+  log "Copied the $VERSION release notes into $(basename "$DIST")"
+else
+  log "No release notes for $VERSION at ${NOTES_SRC#"$OFFLINE"/} — writing none"
+fi
+
 log "Done"
 ls -la "$DIST"
 echo

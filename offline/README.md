@@ -111,7 +111,7 @@ syncing with no duplicates; a lost response; a rejected change that keeps its
 place; incremental pulls; backup and restore; and two tills selling at once.
 
 ```
-npm test     # 14/14 checks
+npm test     # 16/16 checks
 ```
 
 ## Desktop packaging
