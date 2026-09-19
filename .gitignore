@@ -31,3 +31,7 @@ backend/bootstrap/cache/*.php
 
 # Offline POS till: runtime data (local database, device token, backups)
 offline/data/
+
+# Offline POS till: build output and the Windows installer deliverable
+offline/build/
+offline/dist/

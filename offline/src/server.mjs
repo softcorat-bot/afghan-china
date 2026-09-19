@@ -6,11 +6,12 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+
 import {
   addCashMovement, closeSession, createCustomer, createProduct, createSale, findByBarcode, findCustomer, getSale,
   openSession, openSessionRow, refundSale, salesSummary, searchCustomers, searchProducts, sessionTotals,
 } from './pos.mjs';
+import { assetExists, contentType, readAsset } from './public-assets.mjs';
 import { cacheUser, loadDeviceCredentials, login as localLogin, logout, resolveSession, saveDeviceCredentials } from './auth.mjs';
 import { getMeta, openDatabase, setMeta } from './db.mjs';
 import { SyncClient, registerDevice } from './sync/client.mjs';
@@ -18,9 +19,9 @@ import { SyncEngine } from './sync/engine.mjs';
 import { counts, recentLog, retryFailed } from './queue.mjs';
 import { createBackup } from './backup.mjs';
 import { nowIso, suggestDeviceId } from './ids.mjs';
+import { isMainModule, moduleDir } from './runtime-paths.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const PUBLIC_DIR = path.join(moduleDir, '..', 'public');
 
 export function createTill({ dbFile = null, serverUrl = null, port = 7817, host = '0.0.0.0' } = {}) {
   const db = openDatabase(dbFile ?? undefined);
@@ -195,6 +196,25 @@ async function handleApi({ request, response, url, till }) {
 
     case route === 'GET /api/customers':
       return send(response, 200, { data: searchCustomers(db, { query: url.searchParams.get('q') ?? '' }) });
+
+    // First-run provisioning: a fresh till has no staff at all, so the person
+    // installing it may add the first sign-in. After that it needs a signed-in
+    // user, and only the hash of what they typed is ever stored.
+    case route === 'POST /api/staff': {
+      const staffCount = db.prepare('select count(*) c from users').get().c;
+
+      if (Number(staffCount) > 0) requireUser(user);
+      if (!body.identifier || !body.secret) return send(response, 422, { message: 'A user and a password or PIN are required.' });
+
+      const id = cacheUser(db, {
+        uuid: body.uuid ?? undefined,
+        name: body.name ?? body.identifier,
+        email: body.identifier,
+        role: body.role ?? 'Counter',
+      }, body.secret, { type: body.use_pin ? 'pin' : 'password' });
+
+      return send(response, 201, { ok: true, user_id: id, message: `${body.identifier} can now sign in on this till with no internet.` });
+    }
 
     case route === 'POST /api/customers':
       requireUser(user);
@@ -377,17 +397,18 @@ async function remoteLogin(serverUrl, identifier, secret) {
 
 function serveStatic(request, response, url) {
   const relative = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
-  const file = path.join(PUBLIC_DIR, relative);
 
-  if (!file.startsWith(PUBLIC_DIR) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+  // A packaged till carries its screen inside the executable; a development one
+  // reads it from disk. Same files either way.
+  if (relative.includes('..') || !assetExists(relative)) {
     response.writeHead(404, { 'content-type': 'text/plain' }).end('Not found');
 
     return;
   }
 
-  const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
-  response.writeHead(200, { 'content-type': types[path.extname(file)] ?? 'application/octet-stream' });
-  fs.createReadStream(file).pipe(response);
+  const body = readAsset(relative);
+  response.writeHead(200, { 'content-type': contentType(relative), 'content-length': Buffer.byteLength(body) });
+  response.end(body);
 }
 
 function readBody(request) {
@@ -409,7 +430,7 @@ function send(response, status, payload) {
   response.end(body);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   startServer({
     dbFile: process.env.SOFTCORA_DB ?? null,
     serverUrl: process.env.SOFTCORA_SERVER ?? null,

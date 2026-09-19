@@ -347,8 +347,21 @@ export function openDatabase(file = process.env.SOFTCORA_DB || defaultDbPath()) 
   return db;
 }
 
+/**
+ * Where the till keeps its database.
+ *
+ * Installed on Windows it must not depend on the working directory of a
+ * shortcut — that would create a second, empty database and look exactly like
+ * lost data. The profile folder is the one place an update never touches.
+ */
 export function defaultDataDir() {
-  return process.env.SOFTCORA_DATA || path.join(process.cwd(), 'data');
+  if (process.env.SOFTCORA_DATA) return process.env.SOFTCORA_DATA;
+
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
+    return path.join(process.env.LOCALAPPDATA, 'SoftCoraPOS', 'data');
+  }
+
+  return path.join(process.cwd(), 'data');
 }
 
 export function defaultDbPath() {
