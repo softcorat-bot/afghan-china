@@ -144,8 +144,12 @@
     <div class="panel">
       <h2>This till</h2>
       <div id="devicePanel"></div>
+      <h3>Connect this till to the server</h3>
+      <div id="registerPanel"></div>
       <h3>Settings</h3>
       <div id="settingsPanel"></div>
+      <h3>Who can sign in</h3>
+      <div id="staffPanel"></div>
       <h3>Backup</h3>
       <div class="row">
         <button id="backupNow" class="btn">Create backup</button>
@@ -154,6 +158,39 @@
     </div>
   </section>
 </main>
+
+<!-- First run: a till that has just been installed has no sign-in yet, and the
+     shop has to be able to set one up without a terminal and without internet. -->
+<div id="setupOverlay" class="overlay hidden">
+  <form id="setupForm" class="card wide">
+    <h2>Setting up this till</h2>
+    <p class="muted">
+      Two steps, both optional to start with: this till sells with or without
+      them, but it can only sync once it is registered.
+    </p>
+
+    <h3>1. Register this till</h3>
+    <p class="muted">Ask your administrator for the server address and an activation code.</p>
+    <label>Device ID <input id="setupDeviceId" placeholder="SC-POS-KBL-8F31A7" /></label>
+    <label>Server address <input id="setupServer" placeholder="https://pos.example.com" /></label>
+    <label>Activation code <input id="setupCode" placeholder="ABCD-1234" /></label>
+    <div class="row">
+      <button type="button" id="setupRegister" class="btn">Register</button>
+      <span class="muted">Works with no internet too — register later if you like.</span>
+    </div>
+    <p id="setupRegisterMessage" class="message"></p>
+
+    <h3>2. Add the first sign-in</h3>
+    <label>Name <input id="setupName" placeholder="Ahmed" /></label>
+    <label>Email or username <input id="setupUser" placeholder="owner@shop.af" autocomplete="off" /></label>
+    <label>Password or PIN <input id="setupSecret" type="password" placeholder="At least 6 characters" autocomplete="new-password" /></label>
+    <label class="check"><input id="setupPin" type="checkbox" /> This is a numeric PIN</label>
+    <p class="muted">It is stored on this machine only as a hash — never in clear text.</p>
+    <p id="setupMessage" class="message"></p>
+
+    <button class="btn primary wide">Save and start selling</button>
+  </form>
+</div>
 
 <div id="loginOverlay" class="overlay">
   <form id="loginForm" class="card">

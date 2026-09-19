@@ -47,7 +47,9 @@ export function createProduct(db, params = {}) {
   const unit = pick('unit') ?? 'pcs';
   const taxRate = Number(pick('taxRate', 'tax_rate') ?? 0);
   const trackInventory = pick('trackInventory', 'track_inventory') ?? true;
-  const openingStock = Number(pick('openingStock', 'opening_stock', 'stock_qty') ?? 0);
+  // `stock` is accepted too: quietly creating a product with no stock because
+  // the caller used a shorter word is how a shop ends up unable to sell.
+  const openingStock = Number(pick('openingStock', 'opening_stock', 'stock_qty', 'stock') ?? 0);
 
   if (!name || !String(name).trim()) throw new Error('A product needs a name.');
 

@@ -29,20 +29,28 @@ step, no external services).
 
 ## Set it up (once, per till)
 
+A till that has just been started has no sign-in yet, so the screen opens on a
+**setup panel** instead of a sign-in box: it creates the first staff sign-in and
+offers to register the till. Both are optional to begin with — the till sells
+with no server at all, and registration can be done later under
+*Settings → Connect this till*.
+
 1. **On the server** — an administrator opens *Settings → Devices*, adds the till
    and reads out the one-time activation code.
-2. **On the till**
+2. **On the till** — the setup panel asks for that code, the server address and
+   the first sign-in. Under the hood, or from a terminal:
 
 ```bash
-node src/cli.mjs init --device SC-POS-KBL-8F31A7 --server https://pos.shop.af
+node src/cli.mjs init --device SC-POS-KBL-8F31A7 --server https://pos.shop.af   # optional
 node src/cli.mjs register --code ABCD-1234        # exchanges the code for a device token
 node src/cli.mjs staff --user cashier@shop.af --password '…' --pin 1111
 npm start
 ```
 
-`init` only sets identity; the till sells with no server at all. `staff` caches
-the sign-in credential **as a scrypt hash** — the till never stores a password or
-PIN in clear text, and a wrong password is refused offline.
+A device id is generated the first time the database is opened, so no till can
+ring a sale before it knows which till it is. `staff` caches the sign-in
+credential **as a scrypt hash** — the till never stores a password or PIN in
+clear text, and a wrong password is refused offline.
 
 ## What the till keeps
 

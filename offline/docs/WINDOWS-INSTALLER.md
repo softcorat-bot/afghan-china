@@ -44,23 +44,37 @@ half-finished update.
 ## Building it
 
 ```bash
-npm install esbuild postject 7zip-bin            # in /home/user/tooling
-bash offline/installer/build-windows.sh          # add --skip-runtime-download to reuse the cache
+bash offline/installer/build-windows.sh          # add --skip-runtime-download to reuse the cached runtime
 ```
+
+The only prerequisite is Node 22.5+ on `PATH` and a network that can reach
+`registry.npmjs.org`. Everything else the build needs — `esbuild`, `postject`,
+`7zip-bin`, the 7-Zip SFX stub and the Windows runtime itself — is fetched on
+demand into `offline/build/tooling` and `offline/build/cache`, so a fresh
+checkout builds with one command and nothing is installed by hand. Two details
+worth knowing:
+
+* The SFX stub is fetched as a bare tarball rather than through
+  `npm install maker-7z-sfx`: that package depends on `@electron-forge`, whose
+  tree reaches a `git+https://codeload.github.com/...` dependency that cannot be
+  verified on every machine.
+* The Windows runtime comes from the npm package `node-win-x64`, and its
+  published integrity hash is checked before the tarball is used.
 
 The script is deliberately loud and fails closed:
 
-1. bundles `src/win-main.mjs` into `offline/build/till.cjs` (esbuild, CJS — a
-   packaged executable loads its entry point as CommonJS, so the sources avoid
-   top-level `await`);
+1. fetches any missing build tool, then bundles `src/win-main.mjs` into
+   `offline/build/till.cjs` (esbuild, CJS — a packaged executable loads its entry
+   point as CommonJS, so the sources avoid top-level `await`);
 2. builds the SEA preparation blob, embedding `public/index.html`, `app.js` and
    `styles.css` as assets;
 3. injects it into the cached `node.exe` (`postject`, with the `NODE_SEA_FUSE`
    sentinel);
 4. **self-tests that exact blob on Linux** — it injects the same blob into the
    Linux `node` binary and asserts that the packaged form boots on port 7899,
-   answers `/api/device`, serves the embedded screen, creates its database and
-   runs `--cli status`;
+   answers `/api/device`, serves the embedded screen (`/`, `/app.js`,
+   `/styles.css`, each checked by HTTP status and content), creates its database
+   and runs `--cli status`;
 5. assembles the payload and converts every `.cmd`/`.ps1`/`.txt` to CRLF;
 6. packs it with LZMA2 and glues it after the stub and its configuration;
 7. writes the portable zip and `sha256.txt`.
@@ -78,6 +92,13 @@ on both platforms — only the host binary differs.
    progress in its own window and then starts the till.
 3. The till opens at <http://127.0.0.1:7817> and is listed in **Apps & features**
    as *SoftCora POS*.
+
+   Because the database is new, it opens on the **setup panel**: the first staff
+   sign-in is created there (stored as a hash), and the panel offers to register
+   the till with the server using the administrator's activation code. Skipping
+   registration is allowed — the till sells, and the sales wait until the first
+   **Sync Now**. Both are reachable later under *Settings → Connect this till*
+   and *Settings → Who can sign in*.
 
 ```
 %LOCALAPPDATA%\SoftCoraPOS\app      the program (replaced on update)
@@ -118,8 +139,8 @@ of the project's acceptance checklist:
 | --- | --- | --- |
 | 1 | Install on a clean Windows 10/11 x64 machine with no PHP/Node/WAMP | finishes without an administrator prompt; the till opens |
 | 2 | `verify.ps1` | database found, device id shown, no errors |
-| 3 | Open Settings → This till, register with the server address and an activation code | device appears as *Active* under Settings → Devices on the server |
-| 4 | Add a staff sign-in, sign out, sign in with the network cable unplugged | sign-in works; the password is never stored in clear text |
+| 3 | On the setup panel, register with the server address and an activation code | device appears as *Active* under Settings → Devices on the server |
+| 4 | Create the first sign-in on the setup panel, sign out, sign in with the network cable unplugged | sign-in works; the password is never stored in clear text |
 | 5 | Unplug the network; sell 20 items, add 5 customers, do 3 returns, make stock movements, open/close 2 drawers | every sale completes; Sync Status reads *Offline* with a pending count |
 | 6 | Close the till (or reboot) and reopen it | all 20 sales, the customers and both drawers are still there |
 | 7 | Reconnect; press **Sync Now** | *Uploading n/N*, then *Downloaded n/N*, then a summary; pending drops to 0 |

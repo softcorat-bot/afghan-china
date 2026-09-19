@@ -124,6 +124,10 @@ async function handleApi({ request, response, url, till }) {
       });
 
     case route === 'POST /api/device/register': {
+      // First run may register itself (that is what the activation code is
+      // for); once staff exist, changing this till's identity needs a sign-in.
+      if (Number(db.prepare('select count(*) c from users').get().c) > 0) requireUser(user);
+
       const deviceId = body.device_id || getMeta(db, 'device_id') || suggestDeviceId(body.branch ?? 'POS');
       const serverUrl = body.server_url || getMeta(db, 'server_url', 'http://localhost:8000');
 
@@ -175,6 +179,35 @@ async function handleApi({ request, response, url, till }) {
     case route === 'POST /api/auth/logout':
       logout(db, sessionToken);
       return send(response, 200, { ok: true });
+
+    /* ── first run ───────────────────────────────────────────────────── */
+    /* A till that has just been installed has no users, so nobody can sign
+       in yet — and a shop with no terminal at hand must never be stuck behind
+       a sign-in it cannot pass. This is the one endpoint that answers what a
+       brand-new till needs to know, and it is the only thing the screen shows
+       until the first sign-in exists. */
+    case route === 'GET /api/setup': {
+      const staffCount = db.prepare('select count(*) c from users').get().c;
+
+      return send(response, 200, {
+        needs_setup: Number(staffCount) === 0,
+        staff_count: Number(staffCount),
+        device_id: getMeta(db, 'device_id'),
+        device_name: getMeta(db, 'device_name'),
+        registered: Boolean(loadDeviceCredentials()?.device_token),
+        server_url: getMeta(db, 'server_url'),
+        branch_id: getMeta(db, 'branch_id'),
+        data_dir: db.prepare('pragma database_list').get()?.file ?? null,
+        app_version: '1.0.0',
+      });
+    }
+
+    case route === 'GET /api/staff': {
+      // Listing who can sign in is not a secret on the shop's own machine, and
+      // it has to work before the first sign-in exists.
+      const rows = db.prepare('select id, uuid, name, email, role, active from users order by id').all();
+      return send(response, 200, { data: rows });
+    }
 
     case route === 'GET /api/auth/me':
       return send(response, user ? 200 : 401, { user });

@@ -140,3 +140,15 @@ th { color: var(--muted); font-weight: 600; }
 }
 .card { background: white; border-radius: 16px; padding: 24px; width: min(420px, 92vw); }
 .card input { width: 100%; margin-bottom: 10px; }
+
+/* First-run panel and the Settings forms: readable on a shop counter screen,
+   and scrollable when the list of staff grows. */
+.card.wide { width: min(560px, 94vw); max-height: 92vh; overflow: auto; }
+.card h3 { margin: 18px 0 6px; font-size: 15px; }
+.card label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.card label input, .card label select { margin-top: 4px; }
+.panel label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.panel label input, .panel label select { margin-top: 4px; }
+.panel h3 { margin: 20px 0 8px; font-size: 15px; }
+.panel h4 { margin: 16px 0 6px; font-size: 14px; }
+.card .row { justify-content: flex-start; }

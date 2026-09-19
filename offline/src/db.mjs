@@ -16,6 +16,8 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { suggestDeviceId } from './ids.mjs';
+
 export const SCHEMA_VERSION = 1;
 
 const SCHEMA = `
@@ -342,6 +344,14 @@ export function openDatabase(file = process.env.SOFTCORA_DB || defaultDbPath()) 
   const current = Number(getMeta(db, 'schema_version') || 0);
   if (current < SCHEMA_VERSION) {
     setMeta(db, 'schema_version', String(SCHEMA_VERSION));
+  }
+
+  // A till gets its own identity the first time it starts, before it has rung
+  // anything: receipt numbers are device-scoped, so a sale must never be
+  // numbered before the device knows which device it is. Registration with the
+  // server later keeps this id, it does not replace it.
+  if (!getMeta(db, 'device_id')) {
+    setMeta(db, 'device_id', suggestDeviceId(getMeta(db, 'branch_code')));
   }
 
   return db;

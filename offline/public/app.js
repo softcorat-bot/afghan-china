@@ -24,7 +24,10 @@ async function api(method, path, body = null) {
   });
 
   const payload = await response.json().catch(() => ({}));
-  if (response.status === 401 && path !== '/api/auth/login') showLogin();
+  if (response.status === 401 && path !== '/api/auth/login' && path !== '/api/setup') {
+    // During first-run setup there is nothing to sign in with yet.
+    if ($('setupOverlay').classList.contains('hidden')) showLogin();
+  }
 
   return { ok: response.ok, status: response.status, payload };
 }
@@ -76,11 +79,90 @@ $('loginForm').addEventListener('submit', async (event) => {
   boot();
 });
 
+/* ── first run ──────────────────────────────────────────────────────────── */
+
+async function showSetup(setup = null) {
+  const info = setup ?? (await api('GET', '/api/setup')).payload ?? {};
+
+  $('setupDeviceId').value = info.device_id ?? '';
+  $('setupServer').value = info.server_url ?? '';
+  $('loginOverlay').classList.add('hidden');
+  $('setupOverlay').classList.remove('hidden');
+
+  $('setupRegisterMessage').textContent = info.registered
+    ? 'This till is already registered.'
+    : 'Not registered yet — sales still work, they wait in the till until it is.';
+}
+
+$('setupRegister').addEventListener('click', async () => {
+  const message = $('setupRegisterMessage');
+  message.textContent = 'Contacting the server…';
+
+  const { ok, payload } = await api('POST', '/api/device/register', {
+    device_id: $('setupDeviceId').value.trim() || undefined,
+    server_url: $('setupServer').value.trim() || undefined,
+    activation_code: $('setupCode').value.trim(),
+  });
+
+  message.textContent = ok
+    ? `Registered as ${payload.device_id}${payload.branch_id ? ` (branch ${payload.branch_id})` : ''}.`
+    : `Could not register: ${payload.message ?? payload.reason ?? 'the server was not reachable'}. It can be done later in Settings.`;
+});
+
+$('setupForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const message = $('setupMessage');
+  const identifier = $('setupUser').value.trim();
+  const secret = $('setupSecret').value;
+  const usePin = $('setupPin').checked;
+
+  if (!identifier || !secret) {
+    message.textContent = 'A user and a password or PIN are required.';
+    return;
+  }
+
+  message.textContent = 'Saving…';
+
+  const created = await api('POST', '/api/staff', {
+    identifier,
+    secret,
+    use_pin: usePin,
+    name: $('setupName').value.trim() || identifier,
+    role: 'Owner',
+  });
+
+  if (!created.ok) {
+    message.textContent = created.payload.message ?? 'Could not save this sign-in.';
+    return;
+  }
+
+  const login = await api('POST', '/api/auth/login', { identifier, secret, use_pin: usePin });
+  if (!login.ok || !login.payload.token) {
+    message.textContent = 'Sign-in saved, but signing in failed. Try the sign-in screen.';
+    $('setupOverlay').classList.add('hidden');
+    return showLogin();
+  }
+
+  state.token = login.payload.token;
+  state.user = login.payload.user;
+  localStorage.setItem('softcora.session', login.payload.token);
+  $('setupOverlay').classList.add('hidden');
+  boot();
+});
+
 /* ── the till screen ────────────────────────────────────────────────────── */
 
 async function boot() {
   const me = await api('GET', '/api/auth/me');
-  if (!me.ok) return showLogin();
+  if (!me.ok) {
+    // A till nobody can sign in to yet must be able to create its first
+    // sign-in — otherwise a freshly installed shop has no way in at all.
+    const setup = await api('GET', '/api/setup');
+    if (setup.ok && setup.payload.needs_setup) return showSetup(setup.payload);
+
+    return showLogin();
+  }
 
   state.user = me.payload.user;
   if (!state.token) {
@@ -558,6 +640,68 @@ async function refreshSettings() {
       <div><small>Server</small><b>${escapeHtml(d.server_url ?? '')}</b></div>
     </div>`;
 
+  $('registerPanel').innerHTML = `
+    <p class="muted">Sends this till's identity to the server and receives its device token.
+      Until then the till sells without syncing.</p>
+    <label>Server address <input id="registerServer" value="${escapeHtml(d.server_url ?? '')}" /></label>
+    <label>Activation code <input id="registerCode" placeholder="ABCD-1234" /></label>
+    <div class="row">
+      <button id="registerNow" class="btn">${d.registered ? 'Re-register' : 'Register this till'}</button>
+      <span class="muted">Device ID ${escapeHtml(d.device_id ?? '')}</span>
+    </div>
+    <p id="registerMessage" class="message"></p>`;
+
+  $('registerNow').addEventListener('click', async () => {
+    $('registerMessage').textContent = 'Contacting the server…';
+
+    const { ok, payload } = await api('POST', '/api/device/register', {
+      server_url: $('registerServer').value.trim() || undefined,
+      activation_code: $('registerCode').value.trim(),
+    });
+
+    $('registerMessage').textContent = ok
+      ? `Registered as ${payload.device_id}${payload.branch_id ? ` (branch ${payload.branch_id})` : ''}. Press Sync Now to exchange data.`
+      : `Could not register: ${payload.message ?? payload.reason ?? 'the server was not reachable'}.`;
+
+    if (ok) refreshSettings();
+  });
+
+  const staff = (await api('GET', '/api/staff')).payload.data ?? [];
+  $('staffPanel').innerHTML = `
+    ${staff.length ? `<table>
+      <tr><th>Name</th><th>Email or username</th><th>Role</th></tr>
+      ${staff.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.email ?? '')}</td><td>${escapeHtml(row.role ?? '')}</td></tr>`).join('')}
+    </table>` : '<p class="muted">Nobody can sign in on this till yet.</p>'}
+    <h4>Add a sign-in</h4>
+    <p class="muted">Stored on this till as a hash only. Use the same credentials as the server
+      so staff can sign in with the internet down.</p>
+    <label>Name <input id="staffName" placeholder="Name" /></label>
+    <label>Email or username <input id="staffUser" placeholder="cashier@shop.af" /></label>
+    <label>Password or PIN <input id="staffSecret" type="password" /></label>
+    <label class="check"><input id="staffPin" type="checkbox" /> This is a numeric PIN</label>
+    <label>Role
+      <select id="staffRole">
+        <option>Counter</option>
+        <option>Manager</option>
+        <option>Owner</option>
+      </select>
+    </label>
+    <button id="addStaff" class="btn">Add sign-in</button>
+    <p id="staffMessage" class="message"></p>`;
+
+  $('addStaff').addEventListener('click', async () => {
+    const { ok, payload } = await api('POST', '/api/staff', {
+      identifier: $('staffUser').value.trim(),
+      secret: $('staffSecret').value,
+      use_pin: $('staffPin').checked,
+      name: $('staffName').value.trim() || undefined,
+      role: $('staffRole').value,
+    });
+
+    $('staffMessage').textContent = ok ? payload.message : (payload.message ?? 'Could not save this sign-in.');
+    if (ok) refreshSettings();
+  });
+
   const s = settings.payload;
   $('settingsPanel').innerHTML = `
     <label class="check"><input id="autoSync" type="checkbox" ${s.auto_sync ? 'checked' : ''} /> Automatic sync every</label>
@@ -608,6 +752,12 @@ function escapeHtml(value) {
   $('deviceLabel').textContent = device.payload.device_id ?? 'not registered';
 
   if (!state.token || !(await api('GET', '/api/auth/me')).ok) {
+    const setup = await api('GET', '/api/setup');
+    if (setup.ok && setup.payload.needs_setup) {
+      showSetup(setup.payload);
+      return;
+    }
+
     showLogin();
     return;
   }

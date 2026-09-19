@@ -14,21 +14,22 @@ show a SmartScreen notice because the file is not signed; choose "More info" →
 After it finishes, the till opens in your browser:
     http://127.0.0.1:7817
 
-First-run checklist (Settings tab inside the till)
---------------------------------------------------
-1. Register this till
+First run
+---------
+The till opens on a setup panel, because it has no sign-in of its own yet:
+
+1. Register this till (optional now, can be done later)
    - Server address:  https://your-server.example.com
    - Activation code: ask your administrator (Settings → Devices on the server)
-   → the till receives its own device token. Until you do this, the till still
-     sells; it simply has nothing to sync with.
+   → the till receives its own device token. Until you do this it still sells;
+     the sales wait inside the till and go up at the first Sync Now.
 
-2. Add a staff sign-in
-   - the email and password your staff use on the server
-   → the password is stored on this computer only as a hash, never in clear text,
-     so they can sign in with the internet down.
+2. Create the first sign-in — the email and password your staff use on the
+   server, so the same credentials work here.
+   → the password is stored on this computer only as a hash, never in clear text.
 
-3. Make a product (Sell → "+ Product") or wait for the first sync to pull the
-   catalogue down.
+Then: make a product (Sell → "+ Product"), or wait for the first sync to pull the
+catalogue down. More sign-ins and re-registration live in the Settings tab.
 
 Where things live
 -----------------

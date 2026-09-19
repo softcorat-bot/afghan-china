@@ -34,4 +34,5 @@ offline/data/
 
 # Offline POS till: build output and the Windows installer deliverable
 offline/build/
+offline/node_modules/
 offline/dist/

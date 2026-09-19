@@ -11,11 +11,18 @@ export function uuid() {
   return crypto.randomUUID();
 }
 
-/** SC-POS-KBL-8F31A7 — branch letters plus randomness, never sequential. */
-export function suggestDeviceId(branch = 'POS') {
-  const letters = String(branch).replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 3).padEnd(3, 'X');
+/**
+ * SC-POS-KBL-8F31A7 — branch code plus randomness, never sequential.
+ *
+ * With no branch known the middle group is left out (SC-POS-8F31A7) rather than
+ * repeated: the prefix already says POS.
+ */
+export function suggestDeviceId(branch = null) {
+  const letters = String(branch ?? '').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 3);
   const tail = crypto.randomBytes(3).toString('hex').toUpperCase();
-  return `SC-POS-${letters}-${tail}`;
+  const branchPart = letters && letters !== 'POS' ? `${letters}-` : '';
+
+  return `SC-POS-${branchPart}${tail}`;
 }
 
 /**

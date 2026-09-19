@@ -25,6 +25,7 @@ import {
   addCashMovement, closeSession, createCustomer, createSale, openSession, refundSale,
 } from '../src/pos.mjs';
 import { createBackup, restoreBackup } from '../src/backup.mjs';
+import { startServer } from '../src/server.mjs';
 import { suggestDeviceId, uuid } from '../src/ids.mjs';
 
 /* ── the central server (protocol double) ───────────────────────────────── */
@@ -602,6 +603,91 @@ await step('the till reports the states it is in', async () => {
   assert.equal(engine.status().state, 'pending', 'a local write makes the state pending');
 
   db.close();
+});
+
+/* ── what a freshly installed till does, over its own HTTP surface ──────────
+   This is the installer-day path: a brand-new till with an empty database, a
+   shop that has never seen a computer, and no server reachable yet. */
+await step('a freshly installed till can be set up without a terminal', async () => {
+  const fresh = path.join(tmp, 'fresh-install');
+  fs.rmSync(fresh, { recursive: true, force: true });
+  fs.mkdirSync(fresh, { recursive: true });
+
+  const port = 7823;
+  const till = startServer({ dbFile: path.join(fresh, 'till.sqlite'), serverUrl: 'http://127.0.0.1:1', port, host: '127.0.0.1' });
+
+  const call = async (method, endpoint, body, token) => {
+    const response = await fetch(`http://127.0.0.1:${port}${endpoint}`, {
+      method,
+      headers: {
+        accept: 'application/json',
+        ...(body ? { 'content-type': 'application/json' } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    return { status: response.status, payload: await response.json().catch(() => ({})) };
+  };
+
+  try {
+    const setup = await call('GET', '/api/setup');
+    assert.equal(setup.payload.needs_setup, true, 'an empty till asks to be set up');
+    assert.match(setup.payload.device_id, /^SC-POS-[0-9A-F]{6}$/, 'a fresh till already has its own device id');
+
+    const me = await call('GET', '/api/auth/me');
+    assert.equal(me.status, 401, 'nobody is signed in yet');
+
+    const created = await call('POST', '/api/staff', { identifier: 'owner@shop.af', secret: 'cabinet-9182', name: 'Owner', role: 'Owner' });
+    assert.equal(created.status, 201, 'the first sign-in can be created on a till with no users');
+
+    const login = await call('POST', '/api/auth/login', { identifier: 'owner@shop.af', secret: 'cabinet-9182' });
+    assert.equal(login.status, 200, 'that sign-in works with no internet');
+    const token = login.payload.token;
+
+    const afterwards = await call('POST', '/api/staff', { identifier: 'stranger@shop.af', secret: 'let-me-in' });
+    assert.equal(afterwards.status, 401, 'adding more staff needs a sign-in once setup is done');
+
+    const staff = await call('GET', '/api/staff', null, token);
+    assert.equal(staff.status, 200, 'the staff list answers once signed in');
+    assert.equal(staff.payload.data.length, 1);
+
+    const product = await call('POST', '/api/products', { name: 'Fresh Stock', sale_price: 180, barcode: '6001234567890', opening_stock: 40 }, token);
+    assert.equal(product.payload.product.stock_qty, 40, 'the opening stock a shop types is the stock it gets');
+
+    await call('POST', '/api/session/open', { opening_float: 5000 }, token);
+    const sale = await call('POST', '/api/sales', {
+      items: [{ barcode: '6001234567890', qty: 2 }],
+      payments: [{ method: 'cash', amount: 360 }],
+    }, token);
+
+    assert.equal(sale.status, 201, `the first sale of a new till goes through (${JSON.stringify(sale.payload)})`);
+    assert.ok(sale.payload.sale.device_invoice_no.startsWith(setup.payload.device_id.split('-').pop()),
+      'the receipt is numbered for this device, so two tills cannot collide');
+
+    const unregistered = await call('POST', '/api/device/register', { activation_code: 'AAAA-1111' }, token);
+    assert.equal(unregistered.status >= 400, true, 'registering against a dead server fails honestly instead of pretending');
+
+    const status = await call('GET', '/api/status');
+    assert.equal(status.payload.status.state, 'pending', 'the sale is pending, not lost and not synced');
+  } finally {
+    till.stop();
+    till.till.db.close();
+  }
+});
+
+/* The screen is plain HTML and JavaScript with no build step, so a renamed id is
+   a silent dead button. This is the cheapest possible check that it is not. */
+await step('the screen only refers to elements that exist', () => {
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const script = fs.readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+
+  const defined = new Set([...html.matchAll(/id="([^"]+)"/g)].map((match) => match[1]));
+  const created = new Set([...script.matchAll(/id="([^"]+)"/g)].map((match) => match[1]));
+  const referenced = [...script.matchAll(/\$\('([^']+)'\)/g)].map((match) => match[1]);
+
+  const missing = [...new Set(referenced)].filter((id) => !defined.has(id) && !created.has(id));
+  assert.deepEqual(missing, [], `the screen refers to elements that do not exist: ${missing.join(', ')}`);
 });
 
 await central.close();
