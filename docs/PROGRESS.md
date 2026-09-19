@@ -951,3 +951,61 @@ expenses 3,900 = **net 9,900 (28.7%)**; lifetime **35,657**; branch and counter
 rows reconcile to the totals, with per-counter expense shares summing to the
 branch figure. Playwright: hero, three tabs, ten branch/counter rows, period
 switch to Lifetime — zero console errors. Build green; dist removed.
+
+## Offline POS sync engine — server side (2026-09-19)
+
+The web POS, the API and PostgreSQL are untouched. What is new is the central half
+of a hybrid: a Windows till that sells with no internet and hands the work over
+when it can reach the server. Design notes in `docs/SYNC_ENGINE.md`.
+
+**Identity on every row.** Migration `2026_09_19_000003` adds `uuid`, `revision`,
+`sync_seq`, `origin`, `device_id` and `synced_at` to every synchronizable table and
+back-fills existing rows. On PostgreSQL a trigger pair plus one global sequence
+(`sync_touch_row()`, `sync_seq_global`) stamps rows written by *any* path, so the
+change stream cannot be bypassed by code that forgets to cooperate;
+`SyncServiceProvider` covers other databases and fills uuids.
+
+**Devices are registered, not self-appointed.** `pos_devices` holds a
+`SC-POS-KBL-8F31A7`-style id, a status (`pending → active → disabled | revoked`),
+the issued-token hash, an expiry for the activation code, and the device's cursor
+(`last_pull_seq`). An administrator creates the device in Settings → Devices and
+reads out a one-time activation code; the installation exchanges it for a
+`scpos_…` token, stored as sha256. Disabling or revoking takes effect on the very
+next call. The till never holds a user's password — only its own token.
+
+**Push is idempotent by construction.** The outbox row's `change_uuid` is the key
+into `sync_inbox`; the outcome of a change is written in the same transaction that
+applied it, so "applied" and "recorded" cannot disagree. A re-sent sale (lost
+response, restart, a second Sync Now) replays the stored answer; and because each
+change is its own transaction, a 97/100 batch keeps its 97 successes and the till
+retries only the remainder. A sale uuid that arrives with *different* money is
+never written over: it becomes a critical conflict.
+
+**Handlers, one per entity** (`app/Services/Sync/Handlers`): sale (atomic sale +
+lines + tenders + stock movements + customer totals), refund, stock movement,
+cash session, cash movement, customer, product, expense, end-of-day report.
+Payments and lines travel inside their sale change — one atomic unit, one
+idempotency key.
+
+**Pull is a cursor, not a dump.** `GET /api/v1/sync/pull?since_seq=…` walks the
+single ordered `sync_seq` stream across the device's branch and company, returns
+tombstones for deletions, and answers `has_more` until the till has caught up.
+
+**Conflicts are a decision, never a merge.** `sync_conflicts` records both
+payloads, the differing fields, the policy and the severity. Financial entities
+are `append_only`: nothing is overwritten, and only the owner's override
+permission can set history aside. Master data merges only the fields
+`config/sync.php` declares safe.
+
+**Admin surface** (session auth + `sync_admin:…`): Settings → Devices
+(`/api/devices` with enable/disable/revoke/reauthorize), Settings → Synchronization
+(`/api/sync/overview`, `/api/sync/batches`), Conflicts
+(`/api/sync-conflicts`, `POST /api/sync-conflicts/{id}/resolve`). Permissions
+`manage-devices`, `sync-now`, `resolve-sync-conflicts` and the owner-only
+`override-financial-sync-conflicts` were added to the seeder.
+
+Verified: every PHP file in the project parses clean (`php-parser` 8.3 grammar,
+228 files, 0 errors), and every class referenced from `routes/api.php`,
+`config/sync.php` and `SyncPusher` resolves to a real file with the referenced
+method present. Device-facing endpoints are registered under both `/api/v1/sync/*`
+and the legacy `/api/sync/*` paths.

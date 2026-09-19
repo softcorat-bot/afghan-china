@@ -27,6 +27,8 @@ class PermissionSeeder extends Seeder
         'report',
         'currency', 'exchange-rate',
         'backup', 'log', 'notification', 'dashboard',
+        // Offline POS fleet & the sync conflict centre
+        'device', 'sync-conflict', 'sync-log',
         // System feature visibility — a Super Admin unticks the "-list" box in
         // a role to hide the feature for that role's users.
         'theme', 'language', 'lang-en', 'lang-fa', 'lang-pa', 'lang-zh',
@@ -48,7 +50,11 @@ class PermissionSeeder extends Seeder
         // to Super Admin — only the Platform Owner (or someone the owner
         // explicitly grants these to) may hold them. 'main-cost' = view the
         // financial mirror; 'main-cost-edit' = change real costs.
-        'main-cost', 'main-cost-edit'];
+        'main-cost', 'main-cost-edit',
+        // Offline POS: authorize/disable a till, and decide what happens when a
+        // device and the server disagree. Financial conflicts need the extra
+        // override permission, held by the owner alone by default.
+        'manage-devices', 'sync-now', 'resolve-sync-conflicts', 'override-financial-sync-conflicts'];
 
     public function run(): void
     {
@@ -86,6 +92,9 @@ class PermissionSeeder extends Seeder
             'product-list', 'product-show', 'category-list',
             'sale-list', 'sale-show', 'purchase-list', 'supplier-list',
             'currency-list', 'exchange-rate-list', 'branch-list',
+            'device-list', 'device-show', 'sync-conflict-list', 'sync-conflict-show',
+            'sync-conflict-edit', 'sync-log-list',
+            'manage-devices', 'sync-now', 'resolve-sync-conflicts', 'override-financial-sync-conflicts',
             'notification-list', 'theme-list',
             'language-list', 'lang-en-list', 'lang-fa-list', 'lang-pa-list', 'lang-zh-list',
         ]);
