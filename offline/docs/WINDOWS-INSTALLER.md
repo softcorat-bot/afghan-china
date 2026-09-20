@@ -7,13 +7,22 @@ database engine.
 
 ```
 offline/dist/SoftCora-POS-Setup.exe            24 MB   the installer
+offline/dist/Afghan-China-Setup.exe            24 MB   the same bytes — the name the
+                                                       permanent download link serves
 offline/dist/SoftCoraPOS-portable-win64.zip    37 MB   the same till, copy-and-run
-offline/dist/sha256.txt                                checksums of both
+offline/dist/sha256.txt                                checksums of all of the above
 offline/dist/RELEASE-NOTES.md                          this version's notes, values filled in
 ```
 
 Both are produced by `offline/installer/build-windows.sh` and are **not** in
 version control (see `.gitignore`): rebuild them instead of committing them.
+
+The permanent download link —
+`https://github.com/softcorat-bot/afghan-china/releases/download/latest/Afghan-China-Setup.exe`
+— is a rolling release whose tag the publish workflow moves to the newest build
+and whose `Afghan-China-Setup.exe` asset it clobbers with that build's
+installer. The versioned releases (`v1.0.0`, …) keep the canonical
+`SoftCora-POS-Setup.exe` name and never change behind a release's back.
 
 ---
 

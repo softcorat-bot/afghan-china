@@ -11,7 +11,12 @@
 
 ## 2. Install
 
-1. Copy **`SoftCora-POS-Setup.exe`** to the till PC.
+1. Copy **`SoftCora-POS-Setup.exe`** to the till PC. The newest installer can
+   always be downloaded from the permanent link (needs access to the
+   repository on GitHub):
+
+   **https://github.com/softcorat-bot/afghan-china/releases/download/latest/Afghan-China-Setup.exe**
+
 2. Run it. Windows SmartScreen may warn on a new, unsigned build —
    **More info → Run anyway** (signing is a planned improvement, see RELEASE.md).
 3. The installer (a self-extracting archive) extracts and runs the per-user
