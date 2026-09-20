@@ -59,13 +59,58 @@ Node ≥ 22.5, bash and python3.
    - Install over the previous release with unsynced sales on disk → queue and
      identity intact (`verify.ps1`), same port, `logs\install.log` free of
      `ERROR` lines.
-5. Ship: attach both artifacts + `sha256.txt` to a GitHub release:
+5. Ship: attach both artifacts + `sha256.txt` to a GitHub release. From a
+   machine that can reach `uploads.github.com`:
 
 ```bash
 gh release create v1.0.0 offline/dist/SoftCora-POS-Setup.exe \
    offline/dist/SoftCoraPOS-portable-win64.zip offline/dist/sha256.txt \
    --notes-file offline/dist/RELEASE-NOTES.md
 ```
+
+   This repository is developed in sandboxes that *cannot* reach the upload
+   host, so publishing normally goes through
+   `.github/workflows/publish-release-assets.yml`, which rebuilds on GitHub's
+   runners, verifies its own checksums and attaches them:
+
+```bash
+gh workflow run publish-release-assets.yml --ref main -f tag=v1.0.0
+```
+
+   Two inputs, two questions: **`ref`** is what to *build* (empty means the
+   dispatched branch), **`tag`** is which *release* to attach it to (`latest`
+   means the repository's latest). A `v*` tag push runs it automatically with
+   both pointing at the tag. Uploads use `--clobber` and the notes are rewritten
+   from that same build, so the assets and the checksums on a release page
+   always belong to one run.
+
+## 3a. Re-cutting a release — same version, fixed bytes
+
+For a packaging bug that never worked on a real PC, the version is not the
+problem, so it does not move. What has to change is the bytes and the story:
+
+1. Fix on a branch. `npm test` (18/18 + 11/11) and `npm run check:installer`
+   green, plus whatever new check would have caught the bug — a re-cut without
+   a new guard invites the same re-cut.
+2. Rewrite `offline/docs/RELEASE-NOTES-<version>.md` for the re-cut: what was
+   wrong, in the words the failure produced; that the assets were re-published;
+   which acceptance steps are now covered by CI and which still need a bench PC.
+   A shop that has the broken file must be able to tell the two apart by
+   checksum, so the notes say plainly that the checksums changed.
+3. Merge, then rebuild from `main` and clobber:
+   ```bash
+   gh workflow run publish-release-assets.yml --ref main -f tag=v1.0.0
+   ```
+   Never point `ref` at the release tag when re-cutting — that rebuilds the
+   broken commit and re-uploads it.
+4. The tag still points at the commit that shipped. Leave it and let the notes
+   carry provenance (they end with the commit they were built from), or move it
+   deliberately — a tag push republishes on its own:
+   ```bash
+   git tag -f v1.0.0 <fixed-commit> && git push -f origin v1.0.0
+   ```
+5. Tell everyone who has the old file, by the channel they got it from, that
+   the checksums changed and to download again.
 
 ## 4. Versioning & compatibility rules (don't break these)
 

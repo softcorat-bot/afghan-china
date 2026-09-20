@@ -98,7 +98,7 @@ The script is deliberately loud and fails closed:
 The first packaged release installed nowhere. On a real till it stopped with:
 
 ```
-At C:\Users\farha\AppData\Local\Temp\7ZipSfx.001\install.ps1:152 char:100
+At C:\Users\<name>\AppData\Local\Temp\7ZipSfx.001\install.ps1:152 char:100
 + ...  in your browser (http://127.0.0.1:' -NoNewline; Write-Host "$Port)."
 +                                                                       ~
 Unexpected token ')' in expression or statement.
