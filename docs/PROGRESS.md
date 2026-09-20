@@ -1099,3 +1099,21 @@ Tests: `npm test` → 18/18 e2e + **15/15** installer checks (each new guard
 proven to fail when its fault is put back). To be re-cut as 1.0.0 build 3 once
 the `windows-installer` job is green: version unchanged, notes rewritten (build 3
 entry), assets replaced, checksums different.
+
+Follow-up, same day: the `windows-installer` job went green on run
+[35537650721](https://github.com/softcorat-bot/afghan-china/actions/runs/35537650721)
+(commit 604b619) — the built installer was unpacked, its program ran, the till
+served `/`, `/app.js`, `/styles.css` and `/api/device`, `install.cmd` installed
+into `%LOCALAPPDATA%`, and `install.log`, the installed bytes, the untouched data
+folder and `verify.ps1` all agreed. Getting there took four red runs, and every
+fault it found was in the *verifier*, not in the installer:
+
+| Red run | What the annotations said | Fixed by |
+|---|---|---|
+| 1 | nothing but "Process completed with exit code 1" — the log could not be downloaded | annotations per failed check, the report as step summary and artifact (`-ReportPath`), and a trap so a thrown error reports like a failed check |
+| 2 | `'"\"…\install.cmd\""' is not recognized as an internal or external command` | `cmd.exe /s /c ""<path>" <args>"`, passed as a raw command line (`-RawArguments`) instead of through the generic quoting |
+| 3 | nothing at all again: an early `exit 1` on the unpack path left before reporting | one exit path (`Complete-Run`); unpacking judged by `install.cmd` being there, retried once, and its folder contents reported when it fails |
+| 4 | `the report could not be written to @{product=SoftCora POS; …}` | `-Report` collided with the health report in `$report` (one variable namespace) — renamed to `-ReportPath`/`$healthReport`, with a test that refuses any assignment to `$report` |
+
+The installer itself was already right by run 2: every check it verifies passed
+from the moment the quoting was fixed.
