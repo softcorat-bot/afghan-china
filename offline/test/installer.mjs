@@ -356,6 +356,13 @@ await step('the built installer is run on Windows before it can ship', () => {
   assert.match(verifierCode, /::\{0\} title=\{1\}::\{2\}/, 'a failed check must reach the run as an annotation');
   assert.match(verifierCode, /Write-Annotation -Title 'verify-windows' -Message \(\$check\.name/, 'every failed check must be annotated, not just the thrown ones');
   assert.ok(!/2>&1/.test(verifierCode), "a native command's stderr must not be merged into the pipeline: it can end the script with no report");
+  // A red run whose annotations are empty has two possible meanings, and the
+  // first person to read it cannot tell them apart: the verifier never started,
+  // or it started and had nothing to say. One notice at the start settles it.
+  assert.match(verifierCode, /Write-Annotation -Title 'verify-windows' -Message \$saying -Level 'notice'/, 'the verifier must say it started');
+  // In PowerShell a function exists only once its definition has run, so a trap
+  // that fires before its callee is defined fails on its own - quietly.
+  assert.ok(verifierCode.indexOf('trap {') > verifierCode.indexOf('function Complete-Run {'), 'the trap must be defined after the function it calls');
 
   assert.match(until, /-Install -ReportPath \$report/, 'the CI job must keep the verification report as a file');
   // Windows PowerShell has one namespace for variables: while the parameter was
@@ -370,6 +377,19 @@ await step('the built installer is run on Windows before it can ship', () => {
   const publish = read(path.join(offlineDir, '..', '.github', 'workflows', 'publish-release-assets.yml'));
   assert.match(publish, /needs: \[build, verify-windows\]/, 'nothing may be published before the built installer has run on Windows');
   assert.match(publish, /name: installer-dist/, 'the bytes that are verified must be the bytes that are published');
+
+  // The release gate cannot fail quietly either. Its first run went red in two
+  // seconds with nothing in the annotations but "Process completed with exit
+  // code 1" - and the job's log could not be downloaded from where the failure
+  // was being read, so there was nothing to act on at all.
+  assert.match(publish, /-Install -ReportPath \$report/, 'the release gate must keep the verification report as a file');
+  assert.match(publish, /::error title=verify-windows::/, 'the release gate must annotate whatever stops it before the verifier can');
+  assert.match(publish, /Out-String/, "the release gate must keep the verifier's own output");
+  assert.match(publish, /name: windows-verification/, 'the release gate must keep the report as an artifact, passed or failed');
+  assert.ok(
+    !/2>&1/.test(publish) || /\$ErrorActionPreference = 'Continue'/.test(publish),
+    "a step that merges a native command's stderr must not run under 'Stop'"
+  );
 });
 
 await step("the installer reads a program's exit code reliably", () => {

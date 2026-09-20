@@ -85,28 +85,6 @@ $script:Reports = New-Object System.Collections.ArrayList
 $script:Failed = 0
 $script:Json = $false
 
-# An unforeseen error ends the run like a failed check does: the report is still
-# printed (and written, and annotated), the message still says which line broke,
-# and the exit code is still non-zero. A CI job whose whole output is "exit code
-# 1" costs another round trip through the pipeline, and the next person reading
-# this file should not have to guess which of its steps stopped.
-trap {
-    $where = ''
-    if ($_.InvocationInfo -and $_.InvocationInfo.ScriptLineNumber) { $where = ' (line ' + $_.InvocationInfo.ScriptLineNumber + ')' }
-    $message = [string]$_.Exception.Message + $where
-
-    [void]$script:Reports.Add([pscustomobject]@{ name = 'the verifier ran to the end'; ok = $false; detail = $message })
-    $script:Failed++
-
-    Write-Host ('  FAIL the verifier stopped:' + $message) -ForegroundColor Red
-
-    if ($env:GITHUB_ACTIONS) {
-        [Console]::Out.WriteLine(('::error title=verify-windows stopped::' + (($message -replace '\s+', ' ').Trim() -replace '%', '%25')))
-    }
-
-    Complete-Run
-}
-
 # A workflow annotation survives the runner: the job's log does not always, and
 # the JSON in the log is not something a person reads at a glance.
 function Write-Annotation {
@@ -183,6 +161,28 @@ function Complete-Run {
 
     if ($ok) { exit 0 }
     exit 1
+}
+
+# An unforeseen error ends the run like a failed check does: the report is still
+# printed (and written, and annotated), the message still says which line broke,
+# and the exit code is still non-zero. A CI job whose whole output is "exit code
+# 1" costs another round trip through the pipeline, and the next person reading
+# this file should not have to guess which of its steps stopped.
+trap {
+    $where = ''
+    if ($_.InvocationInfo -and $_.InvocationInfo.ScriptLineNumber) { $where = ' (line ' + $_.InvocationInfo.ScriptLineNumber + ')' }
+    $message = [string]$_.Exception.Message + $where
+
+    [void]$script:Reports.Add([pscustomobject]@{ name = 'the verifier ran to the end'; ok = $false; detail = $message })
+    $script:Failed++
+
+    Write-Host ('  FAIL the verifier stopped:' + $message) -ForegroundColor Red
+
+    if ($env:GITHUB_ACTIONS) {
+        [Console]::Out.WriteLine(('::error title=verify-windows stopped::' + (($message -replace '\s+', ' ').Trim() -replace '%', '%25')))
+    }
+
+    Complete-Run
 }
 
 function Add-Check {
@@ -428,6 +428,19 @@ if (-not $Json) {
     Write-Host '  SoftCora POS - verify a Windows build'
     Write-Host '  ------------------------------------'
     Write-Host ''
+}
+
+# One line before the work starts. A red run whose annotations are empty then
+# reads as "the verifier never got going" - which is a different problem, on the
+# job's side, from "it ran and found nothing worth saying" - and the caller that
+# started it has to be the one to explain that. (Not with -Json: that output is
+# one JSON object and nothing else.)
+if (-not $Json) {
+    $saying = 'started on ' + $env:COMPUTERNAME + ', PowerShell ' + $PSVersionTable.PSVersion
+    if ($Installer) { $saying += ', installer ' + $Installer }
+    if ($Exe) { $saying += ', exe ' + $Exe }
+    if ($Install) { $saying += ', and it installs itself' }
+    Write-Annotation -Title 'verify-windows' -Message $saying -Level 'notice'
 }
 
 if (-not $Installer -and -not $Exe) {

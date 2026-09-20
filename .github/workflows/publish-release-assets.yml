@@ -152,21 +152,73 @@ jobs:
       # over HTTP, installs it into %LOCALAPPDATA% and asks verify.ps1 whether
       # the result is healthy. A failure here stops the run before anything is
       # published.
+      #
+      # It is not allowed to fail quietly either. The verifier annotates every
+      # check it makes; this step annotates everything that stops it from getting
+      # that far, and keeps the verifier's own output and the report as the
+      # job's artifact - the run's log is not always readable from where the
+      # next person is sitting.
       - name: Verify the installer on Windows PowerShell 5.1
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
-          $installer = (Resolve-Path offline\dist\SoftCora-POS-Setup.exe).Path
-          $sha = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          # 'Continue', not 'Stop': this script merges a native command's stderr
+          # so that it can be kept, and under 'Stop' Windows PowerShell 5.1 can
+          # turn that into a terminating error with no output at all. Failures
+          # here are judged by the exit code, below.
+          $ErrorActionPreference = 'Continue'
 
-          & powershell -NoProfile -ExecutionPolicy Bypass -File offline\installer\verify-windows.ps1 -Installer $installer -Install
+          function Stop-Saying {
+            param([string]$Message)
+            $single = (($Message -replace '\s+', ' ').Trim() -replace '%', '%25')
+            Write-Host ('::error title=verify-windows::' + $single)
+            exit 1
+          }
+
+          try {
+            $installer = (Resolve-Path -LiteralPath 'offline\dist\SoftCora-POS-Setup.exe' -ErrorAction Stop).Path
+            $verifier = (Resolve-Path -LiteralPath 'offline\installer\verify-windows.ps1' -ErrorAction Stop).Path
+          }
+          catch {
+            Write-Host 'what is here instead:'
+            Get-ChildItem -Path 'offline\dist' -Force -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ('  offline\dist\' + $_.Name) }
+            Get-ChildItem -Path 'offline\installer' -Force -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ('  offline\installer\' + $_.Name) }
+            Stop-Saying ('the verification could not start: ' + [string]$_.Exception.Message)
+          }
+
+          $sha = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          $report = (Join-Path (Get-Location) 'windows-verification.json')
+          Write-Host ('  installer : ' + $installer + ' (' + (Get-Item -LiteralPath $installer).Length + ' bytes, sha256 ' + $sha + ')')
+          Write-Host ('  verifier  : ' + $verifier)
+
+          $output = (& powershell -NoProfile -ExecutionPolicy Bypass -File $verifier -Installer $installer -Install -ReportPath $report 2>&1 | Out-String)
           $code = $LASTEXITCODE
           $global:LASTEXITCODE = 0   # the exit code is judged here, not by the shell
+          Write-Host $output
+
+          if (Test-Path -LiteralPath $report) { Write-Host ('  report    : ' + (Get-Content -LiteralPath $report -Raw)) }
 
           if ($code -ne 0) {
-            throw ("the installer did not verify on Windows (exit " + $code + ", sha256 " + $sha + ") — nothing was published")
+            $tail = ($output -replace '\s+', ' ').Trim()
+            if ($tail.Length -gt 400) { $tail = $tail.Substring($tail.Length - 400) }
+            Stop-Saying ('the installer did not verify on Windows (exit ' + $code + ', sha256 ' + $sha + '), output ends: ' + $tail)
           }
-          Write-Host ('  ✓ the installer runs, serves and installs on Windows (sha256 ' + $sha + ')')
+          Write-Host ('  ok  the installer runs, serves and installs on Windows (sha256 ' + $sha + ')')
+
+      - name: Say what the verification found, whichever way it went
+        if: always()
+        shell: powershell
+        run: |
+          $report = 'windows-verification.json'
+          if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report -Raw }
+          else { Write-Host 'no report was written - the annotations above say why' }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-verification
+          if-no-files-found: warn
+          retention-days: 7
+          path: windows-verification.json
 
   publish:
     name: Attach the built bytes to the releases
