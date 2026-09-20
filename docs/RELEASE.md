@@ -2,7 +2,13 @@
 
 ## 1. Pre-flight
 
-- [ ] `cd offline && npm test` → **18/18**
+- [ ] `cd offline && npm test` → **18/18** end-to-end checks and **11/11**
+      installer checks
+- [ ] `cd offline && npm run check:installer` → the Windows payload is ASCII,
+      CRLF, marked correctly and parses in both readings. CI runs the same check
+      on Linux *and* has Windows PowerShell 5.1 parse and run the scripts
+      (`.github/workflows/offline-till.yml`); a release must not be cut with it
+      red. See `offline/docs/WINDOWS-INSTALLER.md` → *Why the payload is ASCII*.
 - [ ] `cd frontend && npx quasar build` → clean (fleet pages in `dist/spa/assets/`)
 - [ ] Backend untouched? Still run `php artisan migrate --force` + PermissionSeeder
       on the server side when deploying the sync surface for the first time
@@ -38,14 +44,22 @@ Node ≥ 22.5, bash and python3.
 
 1. **Self-test** — already done by the pipeline (see above); a packaging break
    fails the build rather than shipping.
-2. Checksums recorded (`sha256.txt`) — paste them into the release notes issue.
-3. **Windows verification** (VM or a bench PC, once per release):
+2. **Payload check** — also already done by the pipeline, twice: the scripts in
+   version control before anything is compiled, and the payload as packed
+   (`--require-crlf --require-bom`). To re-check an artifact that already exists:
+   ```bash
+   7za x -o/tmp/unpacked offline/dist/SoftCora-POS-Setup.exe -y
+   cd offline && node installer/check-payload.mjs /tmp/unpacked --require-crlf --require-bom
+   ```
+3. Checksums recorded (`sha256.txt`) — paste them into the release notes issue.
+4. **Windows verification** (VM or a bench PC, once per release):
    - Install on a *clean* user profile → sell → close → unplug network
      (`netsh interface set interface "Wi-Fi" admin=disabled`) → sell →
      reconnect → auto-sync → server shows the sales exactly once.
    - Install over the previous release with unsynced sales on disk → queue and
-     identity intact (`verify.ps1`).
-4. Ship: attach both artifacts + `sha256.txt` to a GitHub release:
+     identity intact (`verify.ps1`), same port, `logs\install.log` free of
+     `ERROR` lines.
+5. Ship: attach both artifacts + `sha256.txt` to a GitHub release:
 
 ```bash
 gh release create v1.0.0 offline/dist/SoftCora-POS-Setup.exe \
@@ -80,7 +94,8 @@ gh release create v1.0.0 offline/dist/SoftCora-POS-Setup.exe \
 ## 6. Release checklist summary
 
 ```
-npm test (18/18)  →  quasar build  →  VERSION.txt + release notes
-→  build-windows.sh  →  verify artifacts + checksums  →  Windows bench test
-→  gh release  →  announce + TROUBLESHOOTING.md pointer
+npm test (18/18 + 11/11)  →  npm run check:installer  →  quasar build
+→  VERSION.txt + release notes  →  build-windows.sh  →  verify artifacts +
+checksums  →  Windows bench test  →  gh release  →  announce +
+TROUBLESHOOTING.md pointer
 ```

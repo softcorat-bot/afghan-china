@@ -1,6 +1,6 @@
 ;!@Install@!UTF-8!
 Title="SoftCora POS"
 Progress="yes"
-ExtractTitle="Preparing the SoftCora POS installer…"
+ExtractTitle="Preparing the SoftCora POS installer..."
 RunProgram="install.cmd"
 GUIMode="1"

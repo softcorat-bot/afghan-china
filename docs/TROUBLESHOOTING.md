@@ -9,11 +9,32 @@ Logs are the first stop. On the till PC: `%LOCALAPPDATA%\SoftCoraPOS\logs\`
 | `error.log` | unhandled request failures, print failures |
 | `security.log` | sign-ins (accepted/refused), sign-outs, registration, staff changes, server-side device blocks |
 | `till.log` | service stdout (launcher output) |
+| `install.log` | every install, update and uninstall: what it checked, what it copied, why it stopped |
 
 In the till screen: *Settings → Who can sign in* aside, signed-in staff can read
 the tails at `GET /api/logs/{channel}` (also `SoftCora-POS.exe --cli …`).
 
 ---
+
+## "Setup did not finish" (the installer window shows an error)
+
+The installer window and `%LOCALAPPDATA%\SoftCoraPOS\logs\install.log` say the
+same thing — the log is what to send to support. A stopped install deletes
+nothing and never touches `data\`, so a failed setup cannot lose a sale.
+
+| What it says | Why | What to do |
+|---|---|---|
+| `Unexpected token ')' in expression or statement.` or `The string is missing the terminator: "` with `install.ps1:NNN char:NNN` | The installer scripts were misread, not misspelled. Windows PowerShell 5.1 reads a `.ps1` that has no byte-order mark with the machine's **ANSI code page**; in UTF-8 a typographic dash (`—`) or arrow (`→`) is three bytes whose cp1252 reading ends in a character PowerShell accepts as a *string delimiter*, so a string closes mid-line and the rest of the file is parsed as code. The line PowerShell reports is never the cause. | Use a build made after the payload check was added (`npm run check:installer` fails such a payload before it is packed, and the shipped `.ps1` files carry a UTF-8 mark). If you edit payload scripts yourself: keep them pure ASCII — write `-` and `->`, never `—` or `→`. |
+| `The installer payload is incomplete: there is no SoftCora-POS.exe` | A truncated download, or antivirus removed the program from the folder the setup unpacked into | Verify the file (`certutil -hashfile SoftCora-POS-Setup.exe SHA256` against the release's `sha256.txt`), download it again, and whitelist `%LOCALAPPDATA%\SoftCoraPOS` |
+| `SoftCora-POS.exe did not run on this PC (exit N)` | The packaged program was blocked or quarantined, or the PC is not Windows 10/11 x64 | Restore it from quarantine and whitelist the folder; `install.log` carries the program's own message |
+| `The update was refused to protect the shop data` | The database in `data\` has no device identity, or the update would replace it | Do not force it — this message exists to stop a sale being lost. Copy `data\` aside and get support |
+| `Drive C has only NNN MB free` | Less than about 300 MB free where the till installs | Free space, run the setup again |
+| `port 7817 is already used by another program` (a warning) | Something else on the PC listens on the till's port | The install still finishes. Unzip `SoftCoraPOS-portable-win64.zip` and run `install.cmd -Port 7820` from that folder to move the till |
+| `The running till could not be stopped` | A stuck process holds the program files | End `SoftCora-POS.exe` in Task Manager, run the setup again |
+
+Exit codes, if a script drives the setup: `0` installed, `3` installed but not
+launched (`-NoLaunch`), `1` failed. `install.cmd` treats anything else as a
+failure and pauses with the log's location on screen.
 
 ## "The till will not start"
 

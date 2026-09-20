@@ -98,8 +98,10 @@ administrator decided. A till never overwrites a financial record on its own.
 | `node src/cli.mjs sync \| status \| queue \| conflicts` | sync, inspect the outbox, look at conflicts |
 | `node src/cli.mjs retry [--id <n>]` | retry failed changes (all, or one) |
 | `node src/cli.mjs backup` / `restore --file <backup>` | backup / restore, queue included |
-| `node src/cli.mjs verify` | refuse an update that would drop the queue, the device id or the database |
-| `npm test` | end-to-end test against a server that speaks the sync contract |
+| `node src/cli.mjs verify` | refuse an update that would drop the queue, the device id or the database (JSON: the Windows installer parses it before replacing anything) |
+| `npm test` | end-to-end test against a server that speaks the sync contract, plus the installer's own contracts |
+| `npm run check:installer` | prove the Windows payload is ASCII, CRLF and parses however Windows reads it |
+| `npm run build:windows` | build `dist/SoftCora-POS-Setup.exe`, the portable zip and the checksums |
 
 ## Tests
 
@@ -114,8 +116,18 @@ channelled log files that provably contain no secrets; and receipt printing
 a sale).
 
 ```
-npm test     # 18/18 checks
+npm test                 # 18/18 engine checks, then 11/11 installer checks
+npm run check:installer  # the Windows payload, on its own
 ```
+
+`test/installer.mjs` covers what cannot be run here: the payload passes
+`installer/check-payload.mjs`, and that check *fails* on the bug it was written
+for (a typographic dash in a `.ps1`, which Windows PowerShell 5.1 misreads into
+a string delimiter); what the build ships is CRLF, ASCII, marked `.ps1` and
+unmarked `.cmd`; the promises `install.ps1` makes about the data folder, the
+port and its exit codes are still in the script; the launchers set only
+environment variables something reads; and `--cli verify` prints the JSON the
+installer parses.
 
 ## Logs
 
@@ -157,4 +169,12 @@ file, never drop `sync_queue`, never change the device id.
 `installer/build-windows.sh` produces **dist/SoftCora-POS-Setup.exe** — a real
 self-extracting installer (per-user, no admin, shortcuts, Apps & Features
 entry, data-preserving upgrades, uninstall) plus a portable zip and checksums.
-Details: [docs/WINDOWS-INSTALLER.md](docs/WINDOWS-INSTALLER.md).
+
+The installer scripts run only on Windows, so what breaks them is checked here
+instead: `installer/check-payload.mjs` proves the payload is ASCII, CRLF, marked
+the way each host expects, and that every `.ps1` still has balanced quoting when
+it is read with the ANSI code page Windows PowerShell 5.1 falls back to. The
+build runs it before it compiles anything and again on the payload it packs, and
+`.github/workflows/offline-till.yml` has Windows PowerShell 5.1 itself parse and
+run the scripts on every change. Details, including the field failure this
+exists for: [docs/WINDOWS-INSTALLER.md](docs/WINDOWS-INSTALLER.md).

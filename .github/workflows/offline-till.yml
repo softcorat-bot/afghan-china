@@ -1,0 +1,156 @@
+#
+# The offline till and its Windows installer.
+#
+# The installer broke once in a way no build machine here could see: a payload
+# script was UTF-8 without a byte-order mark and contained a typographic dash.
+# Windows PowerShell 5.1 reads such a file with the machine's ANSI code page,
+# where that dash decodes into a character PowerShell accepts as a string
+# delimiter - so the script parsed on every machine in this repository and on
+# none of the shop's. It is checked in three independent ways now:
+#
+#   * the project's own checker (ASCII, CRLF, marks, quoting read both ways),
+#   * the real PowerShell parser on a Linux runner, where pwsh is installed,
+#   * and Windows PowerShell 5.1 itself, on a Windows runner, which is the host
+#     that actually runs these files - parsing them and running two of them.
+#
+name: Offline till
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'offline/**'
+      - '.github/workflows/offline-till.yml'
+  pull_request:
+    paths:
+      - 'offline/**'
+      - '.github/workflows/offline-till.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-till-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  till:
+    name: The till, end to end, and the installer contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check the installer payload
+        working-directory: offline
+        # pwsh is installed on the GitHub runners, so this run includes the real
+        # PowerShell parser reading every .ps1 in both of its possible readings.
+        run: node installer/check-payload.mjs installer/payload
+
+      - name: The offline till, end to end
+        working-directory: offline
+        run: node test/e2e.mjs
+
+      - name: The installer's contracts
+        working-directory: offline
+        run: node test/installer.mjs
+
+  windows-payload:
+    name: The installer scripts, on the Windows PowerShell that runs them
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Parse every payload script with Windows PowerShell 5.1
+        shell: powershell
+        # ParseFile applies the host's own reading rules: a marked file is
+        # UTF-8, an unmarked one is the ANSI code page. That is the exact
+        # behaviour the shipped installer depends on, so it is the exact
+        # behaviour that is tested.
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host ("  Windows PowerShell " + $PSVersionTable.PSVersion)
+
+          $files = Get-ChildItem -Path offline\installer\payload -Filter *.ps1 -Recurse
+          if (-not $files) { throw 'no payload scripts found' }
+
+          $failed = 0
+          foreach ($file in $files) {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$errors)
+            if ($errors -and $errors.Count -gt 0) {
+              $failed++
+              foreach ($problem in $errors) {
+                Write-Host ("  ! " + $file.Name + ":" + $problem.Extent.StartLineNumber + " " + $problem.Message)
+              }
+            }
+            else {
+              Write-Host ("  ok  " + $file.Name)
+            }
+          }
+
+          if ($failed -gt 0) { throw ($failed.ToString() + ' payload script(s) do not parse on Windows PowerShell') }
+
+      - name: The payload checker, on Windows
+        working-directory: offline
+        run: node installer/check-payload.mjs installer/payload
+
+      - name: Run verify.ps1 on a PC with nothing installed
+        shell: powershell
+        # Executing the scripts is the part that cannot be done on Linux. Both
+        # runs below are read-only or fail on purpose, so neither can leave a
+        # half-installed till behind.
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $payload = (Resolve-Path offline\installer\payload).Path
+
+          & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $payload 'verify.ps1') -Json | Out-Null
+          if ($LASTEXITCODE -ne 1) { throw ("verify.ps1 should report 'not installed' with exit 1, exited " + $LASTEXITCODE) }
+          Write-Host '  ok  verify.ps1 runs and reports that nothing is installed'
+
+      - name: Run install.ps1 against an incomplete payload
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $payload = (Resolve-Path offline\installer\payload).Path
+          $root = Join-Path $env:LOCALAPPDATA 'SoftCoraPOS'
+
+          # A copy with no program inside it: the installer must refuse it before
+          # it creates an app or a data folder, and say why.
+          $broken = Join-Path $env:TEMP ('softcora-broken-' + [guid]::NewGuid().ToString('n'))
+          New-Item -ItemType Directory -Path (Join-Path $broken 'app') -Force | Out-Null
+          Copy-Item (Join-Path $payload 'install.ps1') $broken
+          Copy-Item (Join-Path $payload 'VERSION.txt') $broken
+
+          # -Silent: the console is quiet, but the log must still say why it
+          # stopped, because that log is all a shop can send us.
+          & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $broken 'install.ps1') -Silent -NoLaunch | Out-Null
+          $code = $LASTEXITCODE
+          Remove-Item -LiteralPath $broken -Recurse -Force -ErrorAction SilentlyContinue
+
+          if ($code -ne 1) { throw ("install.ps1 should refuse an incomplete payload with exit 1, exited " + $code) }
+          Write-Host '  ok  install.ps1 refuses an incomplete payload'
+
+          foreach ($folder in @('app', 'data')) {
+            if (Test-Path -LiteralPath (Join-Path $root $folder)) {
+              throw ("install.ps1 created " + $folder + "\ even though it refused to install")
+            }
+          }
+          Write-Host '  ok  a refused install left no program and no data folder behind'
+
+          if (-not (Test-Path -LiteralPath (Join-Path $root 'logs\install.log'))) {
+            throw 'a refused install still has to leave its log behind'
+          }
+          $reason = Select-String -LiteralPath (Join-Path $root 'logs\install.log') -Pattern 'payload is incomplete' -SimpleMatch
+          if (-not $reason) { throw 'the log does not say why the install stopped' }
+          Write-Host '  ok  the log says why: ' $reason.Line.Trim()
