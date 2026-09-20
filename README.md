@@ -93,6 +93,11 @@ The same system has a second deployment face: a **Windows till that keeps
 selling with the internet off** — local SQLite + outbox, real offline
 transactions, idempotent sync to this same Laravel server, and a standalone
 `SoftCora-POS-Setup.exe` installer (no WAMP/PHP/Node required on the till PC).
+The newest installer always lives at the permanent link (needs access to this
+repository on GitHub):
+
+**https://github.com/softcorat-bot/afghan-china/releases/download/latest/Afghan-China-Setup.exe**
+
 The server's fleet admin lives at **System → POS Devices / Synchronization /
 Sync Conflicts** in this web app. Start here:
 

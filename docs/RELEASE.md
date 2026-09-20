@@ -29,6 +29,7 @@ Produces in `offline/dist/` (git-ignored):
 | artifact | what it is |
 |---|---|
 | `SoftCora-POS-Setup.exe` | the installer: 7-Zip SFX → per-user PowerShell installer |
+| `Afghan-China-Setup.exe` | the same installer bytes under the shop-facing name the permanent download link serves |
 | `SoftCoraPOS-portable-win64.zip` | the same till, unzip-and-run |
 | `SoftCora-POS.exe.sha256`, `sha256.txt` | checksums for verification |
 | `RELEASE-NOTES.md` | the versioned notes with this build's checksums filled in |
@@ -78,11 +79,29 @@ gh workflow run publish-release-assets.yml --ref main -f tag=v1.0.0
 ```
 
    Two inputs, two questions: **`ref`** is what to *build* (empty means the
-   dispatched branch), **`tag`** is which *release* to attach it to (`latest`
-   means the repository's latest). A `v*` tag push runs it automatically with
-   both pointing at the tag. Uploads use `--clobber` and the notes are rewritten
-   from that same build, so the assets and the checksums on a release page
-   always belong to one run.
+   dispatched branch), **`tag`** is which *versioned* release to attach the
+   canonical assets to (empty means the repository's latest release; the value
+   `latest` skips the versioned upload entirely). A `v*` tag push runs it
+   automatically with both pointing at the tag. Uploads use `--clobber` and the
+   notes are rewritten from that same build, so the assets and the checksums on
+   a release page always belong to one run.
+
+### The permanent `latest` link
+
+Every run of the publish workflow also refreshes the **rolling `latest`
+release**, whatever else it published:
+
+```
+https://github.com/softcorat-bot/afghan-china/releases/download/latest/Afghan-China-Setup.exe
+```
+
+The workflow moves the `latest` tag to the commit it built, uploads
+`Afghan-China-Setup.exe` (byte-identical to that build's
+`SoftCora-POS-Setup.exe`), the portable zip and `sha256.txt` with `--clobber`,
+and rewrites the release notes with the URL, the commit and the checksums. The
+versioned releases (`v1.0.0`, `v1.1.0`, …) keep their own canonical assets and
+are never touched by this. Nothing else is needed to keep the link honest: any
+future installer build that goes through the workflow updates it.
 
 ## 3a. Re-cutting a release — same version, fixed bytes
 

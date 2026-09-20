@@ -169,6 +169,14 @@ file, never drop `sync_queue`, never change the device id.
 `installer/build-windows.sh` produces **dist/SoftCora-POS-Setup.exe** — a real
 self-extracting installer (per-user, no admin, shortcuts, Apps & Features
 entry, data-preserving upgrades, uninstall) plus a portable zip and checksums.
+The same bytes are also written as **dist/Afghan-China-Setup.exe**, the name
+the permanent download link serves:
+
+**https://github.com/softcorat-bot/afghan-china/releases/download/latest/Afghan-China-Setup.exe**
+
+— refreshed by every publish run (`.github/workflows/publish-release-assets.yml`
+moves the `latest` tag and clobbers the assets, so the link always serves the
+newest installer).
 
 The installer scripts run only on Windows, so what breaks them is checked here
 instead: `installer/check-payload.mjs` proves the payload is ASCII, CRLF, marked

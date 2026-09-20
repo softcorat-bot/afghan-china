@@ -1,12 +1,25 @@
 #
-# Publishes the Windows deliverables as real release assets.
+# Publishes the Windows deliverables as real release assets, and keeps the
+# permanent "latest" download link serving the newest installer.
 #
 # The sandboxed build machines this repository is developed on cannot reach
-# uploads.github.com, so the release exists but its files do not. This workflow
-# runs on GitHub's own runners, rebuilds the installer from source with
+# uploads.github.com, so a release can exist while its files do not. This
+# workflow runs on GitHub's own runners, rebuilds the installer from source with
 # installer/build-windows.sh (which self-tests the packaged blob before
-# packing), verifies its own checksums, and attaches the three files to the
-# release — so the Assets section of the release page is what it claims to be.
+# packing), verifies its own checksums, and attaches the files to the releases —
+# so the Assets section of a release page is what it claims to be.
+#
+# Every run publishes to TWO releases:
+#
+#   * the VERSIONED release named by the tag (e.g. v1.0.0) gets the canonical
+#     SoftCora-named assets, and is left alone between versions — an already
+#     shipped version does not change behind people's backs;
+#   * the ROLLING release `latest` gets `Afghan-China-Setup.exe` (the same
+#     installer bytes under the shop-facing name) plus the portable zip and the
+#     checksums, and its tag is moved to the commit this build came from. That
+#     keeps this URL permanent and always current:
+#
+#       https://github.com/<owner>/<repo>/releases/download/latest/Afghan-China-Setup.exe
 #
 # What to BUILD and what to UPLOAD TO are two different questions, and the
 # inputs keep them apart:
@@ -15,15 +28,24 @@
 #         this run was dispatched on. Never point it at a release tag when
 #         re-cutting: the tag is the commit that shipped, and re-cutting means
 #         shipping that release's assets from the commit that fixed them.
-#   tag   which release to attach the assets to. "latest" (the default) means
-#         the repository's latest release.
+#   tag   which VERSIONED release to attach the canonical assets to. Empty (the
+#         default on a plain dispatch) means the repository's latest release.
+#         The literal value "latest" skips the versioned upload and only
+#         refreshes the rolling release.
 #
 # Run it:
-#   • a `v*` tag push — builds the tag, publishes to it.
+#   • a `v*` tag push — builds the tag, publishes to it, refreshes `latest`.
+#   • a `latest` tag push — moves the rolling tag by hand; the run rebuilds from
+#     the tag's commit and republishes the rolling release from it.
 #   • workflow_dispatch — "Run workflow", or:
 #       gh workflow run publish-release-assets.yml --ref main -f tag=v1.0.0
-#     which rebuilds `main` and clobbers the v1.0.0 assets and notes. That is
-#     how a release is re-cut: same version, fixed bytes.
+#     which rebuilds `main`, clobbers the v1.0.0 assets and notes, and also
+#     refreshes `latest` from the same build. That is how a release is re-cut:
+#     same version, fixed bytes.
+#
+# One run at a time, regardless of the target: two concurrent runs would race
+# on the shared rolling release, and the loser of that race is whoever downloads
+# the older bytes afterwards.
 #
 name: Publish release assets
 
@@ -31,10 +53,11 @@ on:
   push:
     tags:
       - 'v*'
+      - 'latest'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release to attach the assets to (tag name, or "latest")'
+        description: 'Versioned release to attach the assets to ("latest" = rolling release only, empty = the repository''s latest release)'
         required: false
         default: 'latest'
       ref:
@@ -46,12 +69,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-release-assets-${{ github.event.inputs.tag || 'latest' }}
+  group: publish-release-assets
   cancel-in-progress: false
 
 jobs:
   build-and-upload:
-    name: Rebuild the Windows deliverables and attach them to the release
+    name: Rebuild the Windows deliverables and attach them to the releases
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -74,17 +97,20 @@ jobs:
         run: |
           set -euo pipefail
           test -s SoftCora-POS-Setup.exe
+          test -s Afghan-China-Setup.exe
           test -s SoftCoraPOS-portable-win64.zip
           test -s sha256.txt
           [ "$(head -c 2 SoftCora-POS-Setup.exe)" = "MZ" ]
+          # The permanent-link name is the same installer, byte for byte.
+          cmp Afghan-China-Setup.exe SoftCora-POS-Setup.exe
           sha256sum -c sha256.txt
           echo '✓ checksums match the exact artifacts being uploaded'
 
-      - name: Resolve the release tag
+      - name: Resolve the versioned release tag
         id: tag
         run: |
           set -euo pipefail
-          if [ -n "${{ github.event.inputs.tag }}" ] && [ "${{ github.event.inputs.tag }}" != "latest" ]; then
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
             TAG="${{ github.event.inputs.tag }}"
           elif [ "${GITHUB_REF:0:10}" = "refs/tags/" ]; then
             TAG="${GITHUB_REF#refs/tags/}"
@@ -92,9 +118,10 @@ jobs:
             TAG="$(gh release view --json tagName -q .tagName --repo "$GITHUB_REPOSITORY")"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "→ uploading to release $TAG"
+          echo "→ versioned target: $TAG"
 
-      - name: Attach the assets to the release
+      - name: Attach the canonical assets to the versioned release
+        if: steps.tag.outputs.tag != 'latest'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -108,3 +135,83 @@ jobs:
             --notes-file offline/dist/RELEASE-NOTES.md \
             --repo "$GITHUB_REPOSITORY"
           echo "✓ assets attached and notes refreshed on the $TAG release"
+
+      - name: Refresh the rolling latest release (the permanent download link)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSIONED_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ROLLING=latest
+          SHA="$(git rev-parse HEAD)"
+          VERSION="$(sed -n 's/^SoftCora POS //p' offline/installer/payload/VERSION.txt | tr -d '\r')"
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$ROLLING/Afghan-China-Setup.exe"
+
+          # The tag behind the permanent URL is moved to the commit this build
+          # came from, so `latest` always names the newest shipped code.
+          git tag -f "$ROLLING" "$SHA"
+          git push -f origin "refs/tags/$ROLLING:refs/tags/$ROLLING"
+
+          # First run to need it: create the release on the tag just pushed.
+          if ! gh release view "$ROLLING" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$ROLLING" --repo "$GITHUB_REPOSITORY" \
+              --title "Afghan China POS - latest installer" \
+              --notes "(refreshed below)"
+          fi
+
+          gh release upload "$ROLLING" --clobber --repo "$GITHUB_REPOSITORY" \
+            offline/dist/Afghan-China-Setup.exe \
+            offline/dist/SoftCoraPOS-portable-win64.zip \
+            offline/dist/sha256.txt
+
+          {
+            echo "## Permanent download link - always the newest installer"
+            echo
+            echo "**$URL**"
+            echo
+            echo "This link never changes. Every installer build moves the \`$ROLLING\` tag and"
+            echo "replaces these assets, so what the link serves is always the newest build."
+            echo "Download it again rather than keeping copies of the file."
+            echo
+            echo "- Installer: \`Afghan-China-Setup.exe\` (identical bytes to the versioned"
+            echo "  release's \`SoftCora-POS-Setup.exe\`)"
+            echo "- Built from commit [\`$SHA\`](https://github.com/$GITHUB_REPOSITORY/commit/$SHA), version \`$VERSION\`"
+            echo "- Verify: \`certutil -hashfile Afghan-China-Setup.exe SHA256\` against \`sha256.txt\` below"
+            echo
+            echo "### Checksums (sha256.txt)"
+            echo
+            echo '```'
+            cat offline/dist/sha256.txt
+            echo '```'
+            if [ -f offline/dist/RELEASE-NOTES.md ]; then
+              echo
+              echo "---"
+              echo
+              echo "<details>"
+              echo "<summary>Version notes for this build (also on the <code>$VERSIONED_TAG</code> release)</summary>"
+              echo
+              cat offline/dist/RELEASE-NOTES.md
+              echo
+              echo "</details>"
+            fi
+          } > "$RUNNER_TEMP/latest-notes.md"
+
+          gh release edit "$ROLLING" --repo "$GITHUB_REPOSITORY" \
+            --title "Afghan China POS - latest installer" \
+            --notes-file "$RUNNER_TEMP/latest-notes.md" \
+            --latest
+
+          # Prove the permanent link serves the bytes this run uploaded: take
+          # the download path a client takes and hold the result against the
+          # checksums that were just published.
+          VERIFY="$RUNNER_TEMP/verify-download"
+          mkdir -p "$VERIFY"
+          gh release download "$ROLLING" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'Afghan-China-Setup.exe' --pattern 'sha256.txt' \
+            --dir "$VERIFY"
+          cd "$VERIFY"
+          grep 'Afghan-China-Setup.exe' sha256.txt | sha256sum -c -
+          [ "$(head -c 2 Afghan-China-Setup.exe)" = "MZ" ]
+          echo "✓ verified end to end — $URL serves this build"
+
+          echo "✓ $ROLLING refreshed — $URL now serves this build"

@@ -281,6 +281,13 @@ printf ';!@InstallEnd@!\r\n' >> "$BUILD/setup.sfx"
 
 cat "$SFX_SRC" "$BUILD/setup.sfx" "$BUILD/payload.7z" > "$DIST/SoftCora-POS-Setup.exe"
 
+# The permanent download link on the releases page serves this name
+# (https://github.com/<owner>/<repo>/releases/download/latest/Afghan-China-Setup.exe),
+# and a rename at upload time would leave the local checksums describing files
+# that are not on disk. So the alias is produced here, byte-identical to the
+# canonical installer, and both names are covered by sha256.txt.
+cp "$DIST/SoftCora-POS-Setup.exe" "$DIST/Afghan-China-Setup.exe"
+
 # ── 7. the portable alternative ─────────────────────────────────────────────
 log "Writing the portable zip"
 python3 - "$PAYLOAD" "$DIST/SoftCoraPOS-portable-win64.zip" <<'PY'
@@ -296,7 +303,7 @@ PY
 
 # ── 8. checksums ────────────────────────────────────────────────────────────
 cd "$DIST"
-sha256sum SoftCora-POS-Setup.exe SoftCoraPOS-portable-win64.zip > sha256.txt
+sha256sum SoftCora-POS-Setup.exe Afghan-China-Setup.exe SoftCoraPOS-portable-win64.zip > sha256.txt
 sha256sum "$BUILD/$EXE_NAME" > SoftCora-POS.exe.sha256
 
 # ── 9. the release notes the publish step uploads ───────────────────────────
@@ -358,5 +365,6 @@ log "Done"
 ls -la "$DIST"
 echo
 echo "  installer : $DIST/SoftCora-POS-Setup.exe   ($(du -h "$DIST/SoftCora-POS-Setup.exe" | cut -f1))"
+echo "  alias     : $DIST/Afghan-China-Setup.exe   (same bytes — the permanent-link name)"
 echo "  portable  : $DIST/SoftCoraPOS-portable-win64.zip ($(du -h "$DIST/SoftCoraPOS-portable-win64.zip" | cut -f1))"
 echo "  checksums : $(cat "$DIST/sha256.txt" | tr '\n' ' ')"
