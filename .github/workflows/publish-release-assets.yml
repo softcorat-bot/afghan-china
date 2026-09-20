@@ -42,6 +42,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Build the tagged release commit itself on dispatch, so the notes
+          # stamp the tag's commit; PR runs fall back to the PR head.
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
