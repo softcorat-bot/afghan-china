@@ -94,16 +94,13 @@ trap {
     [void]$script:Reports.Add([pscustomobject]@{ name = 'the verifier ran to the end'; ok = $false; detail = $message })
     $script:Failed++
 
-    if ($Json) { [pscustomobject]@{ ok = $false; checks = $script:Reports } | ConvertTo-Json -Depth 5 }
-    else { Write-Host ('  FAIL the verifier stopped:' + $message) -ForegroundColor Red }
+    Write-Host ('  FAIL the verifier stopped:' + $message) -ForegroundColor Red
 
     if ($env:GITHUB_ACTIONS) {
         [Console]::Out.WriteLine(('::error title=verify-windows stopped::' + (($message -replace '\s+', ' ').Trim() -replace '%', '%25')))
     }
-    if ($Report) {
-        try { ([pscustomobject]@{ ok = $false; checks = $script:Reports } | ConvertTo-Json -Depth 5) | Out-File -LiteralPath $Report -Encoding utf8 } catch { }
-    }
-    exit 1
+
+    Complete-Run
 }
 
 # A workflow annotation survives the runner: the job's log does not always, and
@@ -130,6 +127,58 @@ function Write-Phase {
     param([string]$Name)
 
     if (-not $Json) { Write-Host ''; Write-Host ('  -- ' + $Name) -ForegroundColor Cyan }
+}
+
+# Every way out of this script goes through here, including the ways that used
+# to `exit 1` on the spot. A run that ends without a report - and the first red
+# runs of this job ended without one - is a run nobody can diagnose: nothing but
+# a red X, no exit code, no annotation, no artifact.
+function Complete-Run {
+    $ok = ($script:Failed -eq 0)
+
+    if ($Json) {
+        [pscustomobject]@{ ok = $ok; checks = $script:Reports } | ConvertTo-Json -Depth 5
+    }
+    else {
+        Write-Host ''
+        if ($ok) {
+            Write-Host ('  all ' + $script:Reports.Count + ' checks passed on this Windows PC') -ForegroundColor Green
+            Write-Host ''
+        }
+        else {
+            Write-Host ('  ' + $script:Failed + ' of ' + $script:Reports.Count + ' checks failed - this build must not ship') -ForegroundColor Red
+            Write-Host ''
+        }
+    }
+
+    # Failures are said out loud three ways, because the person who has to fix
+    # the next one may have nothing but the run's annotations to go on: one
+    # annotation per failed check, the report on disk for -Report, and the whole
+    # report as the step summary.
+    foreach ($check in $script:Reports) {
+        if (-not $check.ok) { Write-Annotation -Title 'verify-windows' -Message ($check.name + ': ' + $check.detail) }
+    }
+
+    $lines = @('SoftCora POS - the installer on a Windows PC: ' + $script:Reports.Count + ' checks, ' + $script:Failed + ' failed', '')
+    foreach ($check in $script:Reports) {
+        $mark = 'ok  '
+        if (-not $check.ok) { $mark = 'FAIL' }
+        $lines += ('- ' + $mark + ' ' + $check.name + ' - ' + $check.detail)
+    }
+    Write-StepSummary ($lines -join "`n")
+
+    if ($Report) {
+        try {
+            ([pscustomobject]@{ ok = $ok; checks = $script:Reports } | ConvertTo-Json -Depth 5) | Out-File -LiteralPath $Report -Encoding utf8
+        }
+        catch {
+            Write-Annotation -Title 'verify-windows' -Message ('the report could not be written to ' + $Report + ': ' + [string]$_.Exception.Message)
+            $ok = $false
+        }
+    }
+
+    if ($ok) { exit 0 }
+    exit 1
 }
 
 function Add-Check {
@@ -378,11 +427,12 @@ if (-not $Json) {
 }
 
 if (-not $Installer -and -not $Exe) {
-    Write-Host '  Give me something to check: -Installer <setup.exe> or -Exe <SoftCora-POS.exe>.'
-    exit 1
+    Add-Check -Name 'there is something to check' -Ok $false -Detail 'give -Installer <setup.exe> or -Exe <SoftCora-POS.exe>'
+    Complete-Run
 }
 
 $workRoot = $null
+$payloadRoot = $null
 
 if ($Installer) {
     $Installer = (Resolve-Path -LiteralPath $Installer).Path
@@ -400,16 +450,31 @@ if ($Installer) {
         # no report at all - the exact way a CI failure becomes unreadable.
         $sevenOut = Join-Path $workRoot 'sevenzip.out.txt'
         $sevenErr = Join-Path $workRoot 'sevenzip.err.txt'
-        $seven = Start-Process -FilePath $sevenZip `
-            -ArgumentList @('x', ('-o"' + $unpack + '"'), '-y', ('"' + $Installer + '"')) `
-            -NoNewWindow -Wait -PassThru -RedirectStandardOutput $sevenOut -RedirectStandardError $sevenErr
-        $sevenCode = $seven.ExitCode
-        $sevenDetail = $Installer + ' (unpacked with ' + $sevenZip + ')'
-        if ($sevenCode -ne 0) { $sevenDetail = Summarise-Output ((Read-LogTail $sevenOut) + ' ' + (Read-LogTail $sevenErr)) }
 
-        Add-Check -Name 'the setup .exe unpacks' -Ok ($sevenCode -eq 0) -Detail $sevenDetail
+        # What comes out is the evidence, not the number that comes back with
+        # it: a child's exit code is not always readable on Windows (see above),
+        # and a file that is there is stronger evidence than a code that is not.
+        # Two attempts, because a virus scanner can hold a freshly-written file
+        # for a moment.
+        $sevenCode = $null
+        for ($attempt = 1; $attempt -le 2; $attempt++) {
+            $seven = Start-Process -FilePath $sevenZip `
+                -ArgumentList @('x', ('-o"' + $unpack + '"'), '-y', ('"' + $Installer + '"')) `
+                -NoNewWindow -Wait -PassThru -RedirectStandardOutput $sevenOut -RedirectStandardError $sevenErr
+            $sevenCode = $seven.ExitCode
 
-        if ($sevenCode -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $unpack 'install.cmd'))) {
+            if (Test-Path -LiteralPath (Join-Path $unpack 'install.cmd')) { break }
+            if (@(Get-ChildItem -LiteralPath $unpack -Filter '*.7z' -File -ErrorAction SilentlyContinue).Count -gt 0) { break }
+            if ($attempt -lt 2) { Start-Sleep -Seconds 2 }
+        }
+
+        $unpackContents = @()
+        if (Test-Path -LiteralPath $unpack) {
+            $unpackContents = @(Get-ChildItem -LiteralPath $unpack -Force -ErrorAction SilentlyContinue | Select-Object -First 12 | ForEach-Object { $_.Name })
+        }
+        $unpackedOk = (Test-Path -LiteralPath (Join-Path $unpack 'install.cmd'))
+
+        if (-not $unpackedOk -and @(Get-ChildItem -LiteralPath $unpack -Filter '*.7z' -File -ErrorAction SilentlyContinue).Count -gt 0) {
             # The stub is a 7-Zip archive in front of a 7-Zip archive, and which
             # of the two a given 7-Zip build opens depends on how it probes the
             # file. Both layouts are accepted: if the payload arrived as the
@@ -419,11 +484,17 @@ if ($Installer) {
                 $innerOut = Join-Path $workRoot 'payload-inner'
                 Start-Process -FilePath $sevenZip -ArgumentList @('x', ('-o"' + $innerOut + '"'), '-y', ('"' + $archive.FullName + '"')) `
                     -NoNewWindow -Wait -RedirectStandardOutput (Join-Path $workRoot 'sevenzip2.out.txt') -RedirectStandardError (Join-Path $workRoot 'sevenzip2.err.txt')
-                if (Test-Path -LiteralPath (Join-Path $innerOut 'install.cmd')) { $unpack = $innerOut; break }
+                if (Test-Path -LiteralPath (Join-Path $innerOut 'install.cmd')) { $unpack = $innerOut; $unpackedOk = $true; break }
             }
         }
 
-        if ($sevenCode -eq 0) {
+        $unpackDetail = 'install.cmd is there (7-Zip exited ' + $sevenCode + ')'
+        if (-not $unpackedOk) {
+            $unpackDetail = '7-Zip exited ' + $sevenCode + ', and ' + $unpack + ' contains: ' + ($unpackContents -join ', ') + '; ' + (Read-LogTail $sevenErr)
+        }
+        Add-Check -Name 'the setup .exe unpacks' -Ok $unpackedOk -Detail $unpackDetail
+
+        if ($unpackedOk) {
             $required = @('install.cmd', 'install.ps1', 'uninstall.ps1', 'verify.ps1', 'app\VERSION.txt', 'app\RUNTIME.txt', ('app\' + $ExeName))
             $missing = @()
             foreach ($file in $required) {
@@ -434,6 +505,7 @@ if ($Installer) {
             if ($missing.Count -gt 0) { $payloadDetail = 'missing: ' + ($missing -join ', ') }
             Add-Check -Name 'the payload contains the whole installer' -Ok ($missing.Count -eq 0) -Detail $payloadDetail
 
+            $payloadRoot = $unpack
             $Exe = Join-Path $unpack ('app\' + $ExeName)
         }
     }
@@ -442,8 +514,7 @@ if ($Installer) {
 if (-not $Exe -or -not (Test-Path -LiteralPath $Exe)) {
     Add-Check -Name 'there is a program to run' -Ok $false -Detail ('looked for ' + $Exe)
     if ($workRoot) { Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue }
-    if ($Json) { [pscustomobject]@{ ok = $false; checks = $script:Reports } | ConvertTo-Json -Depth 5 }
-    exit 1
+    Complete-Run
 }
 
 $Exe = (Resolve-Path -LiteralPath $Exe).Path
@@ -535,8 +606,7 @@ finally {
 # ---------------------------------------------------------------------------
 # 3. the installer itself, on this PC (opt in: it writes to this user profile)
 # ---------------------------------------------------------------------------
-if ($Install -and $workRoot) {
-    $payloadRoot = Join-Path $workRoot 'payload'
+if ($Install -and $workRoot -and $payloadRoot) {
     $installedRoot = Join-Path $env:LOCALAPPDATA 'SoftCoraPOS'
     $installedExe = Join-Path $installedRoot ('app\' + $ExeName)
     $installLog = Join-Path $installedRoot 'logs\install.log'
@@ -632,7 +702,7 @@ if ($Install -and $workRoot) {
     Add-Check -Name 'the installed version is the version in the payload' -Ok ($installedVersion -eq $expectedVersion) -Detail ('payload ' + $expectedVersion + ', installed ' + $installedVersion)
 }
 elseif ($Install) {
-    Add-Check -Name 'the installer runs on this PC' -Ok $false -Detail '-Install needs -Installer (the setup .exe to unpack)'
+    Add-Check -Name 'the installer runs on this PC' -Ok $false -Detail '-Install needs -Installer <setup.exe>, unpacked successfully'
 }
 
 # ---------------------------------------------------------------------------
@@ -640,48 +710,4 @@ elseif ($Install) {
 # ---------------------------------------------------------------------------
 if ($workRoot) { Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue }
 
-$ok = ($script:Failed -eq 0)
-
-if ($Json) {
-    [pscustomobject]@{ ok = $ok; checks = $script:Reports } | ConvertTo-Json -Depth 5
-}
-else {
-    Write-Host ''
-    if ($ok) {
-        Write-Host ('  all ' + $script:Reports.Count + ' checks passed on this Windows PC') -ForegroundColor Green
-        Write-Host ''
-    }
-    else {
-        Write-Host ('  ' + $script:Failed + ' of ' + $script:Reports.Count + ' checks failed - this build must not ship') -ForegroundColor Red
-        Write-Host ''
-    }
-}
-
-# Failures are said out loud three ways, because the person who has to fix the
-# next one may have nothing but the run's annotations to go on: one annotation
-# per failed check, the report on disk for -Report, and the whole report as the
-# step summary.
-foreach ($check in $script:Reports) {
-    if (-not $check.ok) { Write-Annotation -Title 'verify-windows' -Message ($check.name + ': ' + $check.detail) }
-}
-
-$lines = @('SoftCora POS - the installer on a Windows PC: ' + $script:Reports.Count + ' checks, ' + $script:Failed + ' failed', '')
-foreach ($check in $script:Reports) {
-    $mark = 'ok  '
-    if (-not $check.ok) { $mark = 'FAIL' }
-    $lines += ('- ' + $mark + ' ' + $check.name + ' - ' + $check.detail)
-}
-Write-StepSummary ($lines -join "`n")
-
-if ($Report) {
-    try {
-        ([pscustomobject]@{ ok = $ok; checks = $script:Reports } | ConvertTo-Json -Depth 5) | Out-File -LiteralPath $Report -Encoding utf8
-    }
-    catch {
-        Add-Check -Name 'the report was written where the caller asked' -Ok $false -Detail ([string]$_.Exception.Message)
-        $ok = $false
-    }
-}
-
-if ($ok) { exit 0 }
-exit 1
+Complete-Run

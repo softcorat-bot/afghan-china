@@ -397,6 +397,14 @@ await step("the installer reads a program's exit code reliably", () => {
   // "'\"C:\...\install.cmd\""' is not recognized as an internal or external
   // command" - which is exactly what one red run reported, and it said nothing
   // about the installer. The line cmd gets has to be built once, for cmd.
+  // ...and a run that cannot even unpack has to say so through the same door as
+  // every other failure: no exit path may end without a report, because a run
+  // that ends without one is a run nobody can diagnose. Two red runs of this job
+  // produced nothing but "Process completed with exit code 1".
+  assert.match(verifier, /function Complete-Run/, 'every exit must go through one reporting path');
+  assert.match(verifier, /'there is a program to run'[\s\S]{0,300}?Complete-Run/, 'a run that finds no program must still report');
+  assert.equal((verifier.match(/^\s*exit 1\s*$/gm) || []).length, 1, 'the only exit 1 in the verifier is the one Complete-Run takes');
+
   assert.match(verifier, /-RawArguments/, 'the verifier must not let install.cmd go through the generic argument quoting');
   assert.match(verifier, /\/s \/c ""\{0\}" \{1\}"/, "cmd's own /s /c \"\"<path>\" <args>\" form is the one it parses correctly");
 });
