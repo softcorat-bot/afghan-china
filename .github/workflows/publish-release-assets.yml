@@ -35,6 +35,8 @@
 #
 # Run it:
 #   • a `v*` tag push — builds the tag, publishes to it, refreshes `latest`.
+#   • a `latest` tag push — moves the rolling tag by hand; the run rebuilds from
+#     the tag's commit and republishes the rolling release from it.
 #   • workflow_dispatch — "Run workflow", or:
 #       gh workflow run publish-release-assets.yml --ref main -f tag=v1.0.0
 #     which rebuilds `main`, clobbers the v1.0.0 assets and notes, and also
@@ -51,6 +53,7 @@ on:
   push:
     tags:
       - 'v*'
+      - 'latest'
   workflow_dispatch:
     inputs:
       tag:
