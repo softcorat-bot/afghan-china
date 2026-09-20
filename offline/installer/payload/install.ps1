@@ -315,7 +315,20 @@ Write-Log ('drive {0} has {1} MB free' -f $drive, $freeMb)
 # before anything installed is replaced. A blocked, quarantined or corrupt
 # executable fails here with its own message, and the existing install stays
 # exactly as it was.
+#
+# What the payload says about itself is logged first. This log is what a shop
+# sends when a program will not start, and the Node runtime named in RUNTIME.txt
+# is the first thing to check: the embedded program is a single-executable blob,
+# and such a blob is only readable by the exact Node version that wrote it, so a
+# build made by the wrong version aborts here - on every PC, at startup, before
+# it has read anything of the shop's.
 Write-Log 'checking that the packaged program runs on this PC'
+$runtimeNote = Join-Path $PayloadApp 'RUNTIME.txt'
+if (Test-Path -LiteralPath $runtimeNote) {
+    $runtimeLine = Get-Content -LiteralPath $runtimeNote -TotalCount 1 -ErrorAction SilentlyContinue
+    if ($runtimeLine) { Write-Log ('payload ' + $runtimeLine.Trim()) }
+}
+
 $probeData = New-TemporaryFolder 'softcora-probe-'
 try {
     $probe = Invoke-TillCli -Exe $PayloadExe -DataPath $probeData -Arguments @('--cli', 'status')
@@ -326,8 +339,29 @@ finally {
 
 if ($probe.TimedOut) { Fail ('{0} did not answer within 120 seconds.' -f $ExeName) }
 if ($probe.ExitCode -ne 0) {
-    $detail = ($probe.StdErr + ' ' + $probe.StdOut).Trim()
-    Fail ('{0} did not run on this PC (exit {1}). {2}' -f $ExeName, $probe.ExitCode, $detail)
+    # What the program said, in full, as log lines - and in one line for the
+    # message. A program that aborts does not always report an exit code, and
+    # "(exit )" is not a detail a shop can act on, so a missing one is named.
+    $probeCode = 'unknown'
+    if ($null -ne $probe.ExitCode) { $probeCode = [string]$probe.ExitCode }
+
+    $output = ($probe.StdErr + [Environment]::NewLine + $probe.StdOut)
+    foreach ($line in ($output -split '\r?\n')) {
+        if ($line.Trim()) { Write-Log ('  program says: ' + $line.Trim()) 'WARN' }
+    }
+
+    $detail = ($output -replace '\s+', ' ').Trim()
+    if ($detail.Length -gt 400) { $detail = $detail.Substring(0, 400) + '...' }
+
+    # Say what it means when the program died inside its own runtime: that is a
+    # broken build, not a broken PC, and no amount of retrying on this machine
+    # will change it.
+    $cause = ''
+    if ($detail -match 'SeaDeserializer|Assertion failed') {
+        $cause = ' The program aborted inside its own runtime, so this setup file is unusable on any PC. Do not retry it here: download the setup again from the release link, and check it against sha256.txt.'
+    }
+
+    Fail ('{0} did not run on this PC (exit {1}). {2}{3}' -f $ExeName, $probeCode, $detail, $cause)
 }
 Write-Log 'the packaged program runs' 'OK'
 

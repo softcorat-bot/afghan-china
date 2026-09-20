@@ -1032,3 +1032,36 @@ Deferred by design (needs the Windows shop floor, documented in
 `OFFLINE_TESTING.md` §2): raw thermal print on real hardware, SmartScreen flow
 on a clean PC, power-cut drills, `gh release` at ship time. Backend was already
 complete — zero PHP changes required in this round.
+
+## 2026-09-20 — Installer build 2: the SEA blob was written by the wrong Node version
+
+Reported from the field: a shop PC ran `Afghan-China-Setup.exe` (the rolling
+`latest` build published earlier that day) and setup stopped with
+
+```
+SoftCora-POS.exe did not run on this PC (exit ).
+#  SeaResource ... SeaDeserializer::Read(void) at src\node_sea.cc:172
+#  Assertion failed: (format_value) <= (static_cast<uint8_t>(ModuleFormat::kModule))
+```
+
+Root cause: the publish workflow built on `ubuntu-latest` with `setup-node@22`,
+so `node --experimental-sea-config` wrote a **Node 22** blob while the till ships
+`node-win-x64@26.9.0`. A SEA blob is an internal, version-specific
+serialization: Node 26's deserializer read the Node 22 format field and aborted
+before the till did anything. Reproduced here exactly (Node 22 blob injected into
+a Node 26 binary → the same assertion, exit 134; a Node 26 blob in the same
+binary runs). Nothing in the pipeline could see it: the build's self-test
+injected the blob into *the same local Node that wrote it*, and every other check
+read installer scripts, not the program.
+
+| Item | What changed | Verified by |
+|---|---|---|
+| Blob/runtime pairing | `installer/build-windows.sh` pins one `NODE_VERSION` (26.9.0, overridable with `SOFTCORA_NODE_VERSION`), fetches `node-win-x64` **and** a host runtime of that version, prepares the blob with the fetched host runtime, self-tests the packaged form under it, and stops if either half disagrees. Cached runtimes carry the version in their name; the Windows binary's version is read out of its own version resource, since it cannot be run here | `bash installer/build-windows.sh` built and self-tested end to end here (node 26.9.0 on both halves); the new `test/installer.mjs` guard fails when the old form is put back |
+| The program itself, on Windows | new `installer/verify-windows.ps1`: unpacks the setup, runs `--cli status`/`--cli verify`, starts the till and fetches `/`, `/app.js`, `/styles.css` and `/api/device`, runs `install.cmd -NoLaunch -SkipAutostart`, then checks `install.log`, the installed bytes, the untouched data folder and `verify.ps1` | new `windows-installer` job in `offline-till.yml` (artifact built by the `package` job); `publish-release-assets.yml` is now build → verify-windows → publish, so nothing is uploaded before that |
+| Shop diagnostics | `install.ps1` logs the payload's `RUNTIME.txt` line, writes the program's own output into `install.log` line by line, names a missing exit code (`unknown`) instead of printing `(exit )`, and calls a runtime-plane abort what it is - a build to replace, not a PC to retry | new `test/installer.mjs` guard |
+| Docs | `offline/docs/WINDOWS-INSTALLER.md` → *The blob and the runtime must be the same Node version*; `docs/RELEASE.md` §2, §3, §3a, §4; `docs/TROUBLESHOOTING.md` row for the assertion; `docs/OFFLINE_TESTING.md`; the 1.0.0 release notes | this entry |
+
+Tests: `npm test` → 18/18 e2e + **14/14** installer checks; the e2e suite was
+also re-run under node 26.9.0 (the runtime the till ships) → 18/18. Re-cut as
+1.0.0 build 2: version unchanged, notes rewritten, assets replaced, checksums
+different.

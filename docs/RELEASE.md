@@ -2,7 +2,7 @@
 
 ## 1. Pre-flight
 
-- [ ] `cd offline && npm test` → **18/18** end-to-end checks and **11/11**
+- [ ] `cd offline && npm test` → **18/18** end-to-end checks and **14/14**
       installer checks
 - [ ] `cd offline && npm run check:installer` → the Windows payload is ASCII,
       CRLF, marked correctly and parses in both readings. CI runs the same check
@@ -34,12 +34,24 @@ Produces in `offline/dist/` (git-ignored):
 | `SoftCora-POS.exe.sha256`, `sha256.txt` | checksums for verification |
 | `RELEASE-NOTES.md` | the versioned notes with this build's checksums filled in |
 
-The pipeline itself: esbuild bundle → Node SEA blob (screen embedded as assets)
-→ postject into `node-win-x64` → **self-test of the same blob on the build host**
-(boot, serve screen, create DB, run CLI) → pack. Tools (`esbuild`, `postject`,
-`7zip-bin`, the SFX stub, the Windows runtime) are fetched from the npm registry
-with integrity verification; nothing else is needed on the build machine beyond
+The pipeline itself: fetch the **pinned** Node runtime and a runtime of that same
+version for the build host → esbuild bundle → Node SEA blob (screen embedded as
+assets) **written by the pinned runtime** → postject into `node-win-x64` →
+**self-test of the same blob on the build host, under the pinned version** (boot,
+serve screen, create DB, run CLI) → pack. Tools (`esbuild`, `postject`,
+`7zip-bin`, the SFX stub, both runtimes) are fetched from the npm registry with
+integrity verification; nothing else is needed on the build machine beyond
 Node ≥ 22.5, bash and python3.
+
+⚠️ **The blob and the binary that reads it must be the same Node version.** A SEA
+blob is an internal, version-specific serialization: the runtime validates the
+format field it finds and aborts the process on a mismatch, so a build made with
+the build host's own Node produced an `.exe` that aborted on every Windows PC
+while every check here passed. The version is pinned in
+`installer/build-windows.sh` (`NODE_VERSION`, `SOFTCORA_NODE_VERSION`), both
+halves are verified against it, and — because only Windows can prove a Windows
+binary — the built installer is run on `windows-latest` before anything is
+published. See `offline/docs/WINDOWS-INSTALLER.md` → *The blob and the runtime*.
 
 ## 3. Verify the build
 
@@ -52,8 +64,21 @@ Node ≥ 22.5, bash and python3.
    7za x -o/tmp/unpacked offline/dist/SoftCora-POS-Setup.exe -y
    cd offline && node installer/check-payload.mjs /tmp/unpacked --require-crlf --require-bom
    ```
-3. Checksums recorded (`sha256.txt`) — paste them into the release notes issue.
-4. **Windows verification** (VM or a bench PC, once per release):
+3. **Run the built installer on Windows** — also already done by the pipeline,
+   and by CI on every pull request. `installer/verify-windows.ps1` unpacks the
+   setup file, runs the program inside it, starts the till and fetches its screen
+   and API, installs it into `%LOCALAPPDATA%`, and reads `install.log` and
+   `verify.ps1` back:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File offline\installer\verify-windows.ps1 `
+       -Installer offline\dist\SoftCora-POS-Setup.exe -Install
+   ```
+   `publish-release-assets.yml` runs exactly this between building and uploading,
+   so a build whose program does not start cannot reach a release page.
+4. Checksums recorded (`sha256.txt`) — paste them into the release notes issue.
+5. **Windows bench verification** (VM or a bench PC, once per release — the parts
+   a runner cannot do: SmartScreen, shortcuts as a user sees them, uninstall,
+   and everything that needs a real till or a printer):
    - Install on a *clean* user profile → sell → close → unplug network
      (`netsh interface set interface "Wi-Fi" admin=disabled`) → sell →
      reconnect → auto-sync → server shows the sales exactly once.
@@ -108,7 +133,7 @@ future installer build that goes through the workflow updates it.
 For a packaging bug that never worked on a real PC, the version is not the
 problem, so it does not move. What has to change is the bytes and the story:
 
-1. Fix on a branch. `npm test` (18/18 + 11/11) and `npm run check:installer`
+1. Fix on a branch. `npm test` (18/18 + 14/14) and `npm run check:installer`
    green, plus whatever new check would have caught the bug — a re-cut without
    a new guard invites the same re-cut.
 2. Rewrite `offline/docs/RELEASE-NOTES-<version>.md` for the re-cut: what was
@@ -131,6 +156,11 @@ problem, so it does not move. What has to change is the bytes and the story:
 5. Tell everyone who has the old file, by the channel they got it from, that
    the checksums changed and to download again.
 
+1.0.0 has been re-cut twice, for two different packaging faults — a payload
+Windows PowerShell misread (1.0.0 build 1) and a SEA blob written by the wrong
+Node version (1.0.0 build 2). The notes carry both stories; the version did not
+move for either, because the till itself never changed.
+
 ## 4. Versioning & compatibility rules (don't break these)
 
 - **Additive-only local schema.** Bump `SCHEMA_VERSION` in `offline/src/db.mjs`
@@ -143,6 +173,12 @@ problem, so it does not move. What has to change is the bytes and the story:
   `verify.ps1`, upgrade e2e).
 - **Frontend/server deploy order:** server (backend) first, then tills. An old
   till talking to a new server keeps working; the reverse must never be required.
+- **The shipped Node runtime and the blob move together, or not at all.** The
+  version in `installer/build-windows.sh` (`NODE_VERSION`) supplies both the
+  `node.exe` in the installer and the runtime that writes and self-tests the SEA
+  blob. Changing one half alone produces an installer that aborts at startup on
+  every PC, with a `SeaDeserializer` assertion as the only clue. Bump the pin,
+  rebuild, and let CI's Windows job run the result.
 
 ## 5. Known packaging notes
 
@@ -150,16 +186,19 @@ problem, so it does not move. What has to change is the bytes and the story:
   expected on new builds, improves with age; code-signing (e.g. osslsigncode
   against the SFX stub, or a signed Electron-style wrapper later) is the
   tracked improvement. Checksums in `sha256.txt` are the interim integrity story.
-- The Windows runtime comes from the verified npm package `node-win-x64`
-  (integrity-checked at build; see `RUNTIME.txt` inside the payload).
+- The Windows runtime comes from the verified npm package `node-win-x64`, at
+  the version pinned in `build-windows.sh` (integrity-checked at build, version
+  read back out of its own version resource; see `RUNTIME.txt` inside the
+  payload). The blob is written by a runtime of that same version — see §2.
 - The app embeds no secrets; the only secret a till owns is minted during
   activation on the customer's machine.
 
 ## 6. Release checklist summary
 
 ```
-npm test (18/18 + 11/11)  →  npm run check:installer  →  quasar build
+npm test (18/18 + 14/14)  →  npm run check:installer  →  quasar build
 →  VERSION.txt + release notes  →  build-windows.sh  →  verify artifacts +
-checksums  →  Windows bench test  →  gh release  →  announce +
-TROUBLESHOOTING.md pointer
+checksums  →  verify-windows.ps1 (CI does this before publishing)  →
+Windows bench test for the parts a runner cannot do  →  gh release (workflow)  →
+announce + TROUBLESHOOTING.md pointer
 ```
