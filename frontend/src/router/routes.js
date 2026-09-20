@@ -90,6 +90,11 @@ const routes = [
       { path: 'receipt-designer', name: 'receipt-designer', component: () => import('@/pages/system/ReceiptDesignerPage.vue'), meta: { permission: 'theme-list' } },
       { path: 'hardware-devices', name: 'hardware-devices', component: () => import('@/pages/system/HardwareDevicesPage.vue'), meta: { permission: 'dashboard-list' } },
 
+      // Offline POS fleet: tills, their synchronization and the conflict centre
+      { path: 'pos-devices', name: 'pos-devices', component: () => import('@/pages/system/PosDevicesPage.vue'), meta: { permission: ['device-list', 'manage-devices'] } },
+      { path: 'sync-monitor', name: 'sync-monitor', component: () => import('@/pages/system/SyncMonitorPage.vue'), meta: { permission: ['sync-log-list', 'sync-now', 'manage-devices'] } },
+      { path: 'sync-conflicts', name: 'sync-conflicts', component: () => import('@/pages/system/SyncConflictsPage.vue'), meta: { permission: ['sync-conflict-list', 'resolve-sync-conflicts'] } },
+
       // Module previews — Products/Inventory, POS, Sales, Purchases... arrive per phase
       { path: 'coming-soon/:module', name: 'coming-soon', component: () => import('@/pages/ComingSoonPage.vue') },
 

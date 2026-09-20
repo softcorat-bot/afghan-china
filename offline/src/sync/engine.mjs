@@ -20,6 +20,7 @@ import { claim, counts, dueRows, log, recordResult, recordTransportError } from 
 import { applyPull } from './apply.mjs';
 import { getMeta, setMeta } from '../db.mjs';
 import { nowIso } from '../ids.mjs';
+import { logs } from '../log.mjs';
 
 export const STATES = {
   OFFLINE: 'offline',
@@ -156,6 +157,12 @@ export class SyncEngine {
         state: this.status(),
       };
 
+      logs.sync('sync finished', {
+        status, uploaded: push.uploaded, downloaded: pull.downloaded,
+        duplicates: push.duplicates, conflicts: push.conflicts, failed: push.failed,
+        duration_ms: result.duration_ms,
+      });
+
       this.onProgress({ phase: 'done', ...result });
 
       return result;
@@ -170,6 +177,7 @@ export class SyncEngine {
         duration_ms: Date.now() - started,
       });
 
+      logs.error('sync cycle failed', { error: error.message });
       this.onProgress({ phase: 'error', message: error.message });
 
       return { ok: false, status: 'failed', message: error.message, state: this.status() };
@@ -212,11 +220,13 @@ export class SyncEngine {
         if (blocked) {
           // Retrying will not help: this till needs an administrator.
           setMeta(this.db, 'device_blocked_reason', error.message);
+          logs.securityWarn('sync refused by the server — device needs an administrator', { code: error.code, device_id: this.deviceId });
           for (const row of claimed) {
             this.db.prepare("update sync_queue set status='failed', error_message=?, next_attempt_at=null where id = ?")
               .run(error.message, row.id);
           }
         } else {
+          logs.syncWarn('push batch did not travel; rows stay queued with backoff', { batch_size: claimed.length, error: error.message });
           for (const row of claimed) recordTransportError(this.db, row, error.message);
         }
 

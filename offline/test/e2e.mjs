@@ -26,6 +26,7 @@ import {
 } from '../src/pos.mjs';
 import { createBackup, restoreBackup } from '../src/backup.mjs';
 import { startServer } from '../src/server.mjs';
+import { renderEscPos } from '../src/print.mjs';
 import { suggestDeviceId, uuid } from '../src/ids.mjs';
 
 /* ── the central server (protocol double) ───────────────────────────────── */
@@ -673,6 +674,166 @@ await step('a freshly installed till can be set up without a terminal', async ()
   } finally {
     till.stop();
     till.till.db.close();
+  }
+});
+
+await step('logs land in files, separated by channel, with no secrets inside', async () => {
+  const home = path.join(tmp, 'logs-home');
+  fs.rmSync(home, { recursive: true, force: true });
+  fs.mkdirSync(home, { recursive: true });
+
+  const previousDataEnv = process.env.SOFTCORA_DATA;
+  process.env.SOFTCORA_DATA = home;                    // logs land in <home>/logs
+
+  const port = 7824;
+  const till = startServer({ dbFile: path.join(home, 'till.sqlite'), serverUrl: 'http://127.0.0.1:1', port, host: '127.0.0.1' });
+
+  const call = async (method, endpoint, body, token) => {
+    const response = await fetch(`http://127.0.0.1:${port}${endpoint}`, {
+      method,
+      headers: {
+        accept: 'application/json',
+        ...(body ? { 'content-type': 'application/json' } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    return { status: response.status, payload: await response.json().catch(() => ({})) };
+  };
+
+  try {
+    await call('POST', '/api/staff', { identifier: 'logger@shop.af', secret: 'scuba-5521', name: 'Logger' });
+    await call('POST', '/api/auth/login', { identifier: 'logger@shop.af', secret: 'totally-wrong' });
+    const login = await call('POST', '/api/auth/login', { identifier: 'logger@shop.af', secret: 'scuba-5521' });
+    assert.equal(login.status, 200);
+    const token = login.payload.token;
+
+    // A sync against a dead server must still produce an honest sync-log entry.
+    await call('POST', '/api/sync/now', {}, token);
+
+    const dir = path.join(home, 'logs');
+    const securityLog = fs.readFileSync(path.join(dir, 'security.log'), 'utf8');
+    assert.ok(securityLog.includes('sign-in refused'), 'refused sign-ins are logged');
+    assert.ok(securityLog.includes('sign-in (offline)'), 'accepted sign-ins are logged');
+    assert.ok(!securityLog.includes('scuba-5521'), 'the password never reaches a log line');
+
+    const applicationLog = fs.readFileSync(path.join(dir, 'application.log'), 'utf8');
+    assert.ok(applicationLog.includes('till started'), 'startup is in the application log');
+
+    const syncLog = fs.readFileSync(path.join(dir, 'sync.log'), 'utf8');
+    assert.ok(syncLog.includes('sync finished'), 'the failed sync cycle is recorded in the sync log');
+
+    const tail = await call('GET', '/api/logs/security', null, token);
+    assert.equal(tail.status, 200, 'signed-in staff can read the log tail');
+    assert.ok(tail.payload.lines.some((line) => line.includes('sign-in')));
+
+    const anonymous = await call('GET', '/api/logs/security');
+    assert.equal(anonymous.status, 401, 'log tails are not public');
+  } finally {
+    till.stop();
+    till.till.db.close();
+    if (previousDataEnv === undefined) delete process.env.SOFTCORA_DATA;
+    else process.env.SOFTCORA_DATA = previousDataEnv;
+  }
+});
+
+await step('receipts render to text and ESC/POS, and raw printing says when it needs Windows', async () => {
+  const home = path.join(tmp, 'print-home');
+  fs.rmSync(home, { recursive: true, force: true });
+  fs.mkdirSync(home, { recursive: true });
+
+  const previousDataEnv = process.env.SOFTCORA_DATA;
+  process.env.SOFTCORA_DATA = home;
+
+  const port = 7825;
+  const till = startServer({ dbFile: path.join(home, 'till.sqlite'), serverUrl: 'http://127.0.0.1:1', port, host: '127.0.0.1' });
+
+  const call = async (method, endpoint, body, token) => {
+    const response = await fetch(`http://127.0.0.1:${port}${endpoint}`, {
+      method,
+      headers: {
+        accept: 'application/json',
+        ...(body ? { 'content-type': 'application/json' } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    return { status: response.status, payload: await response.json().catch(() => ({})) };
+  };
+
+  try {
+    await call('POST', '/api/staff', { identifier: 'printer@shop.af', secret: 'roller-3311' });
+    const login = await call('POST', '/api/auth/login', { identifier: 'printer@shop.af', secret: 'roller-3311' });
+    const token = login.payload.token;
+
+    await call('POST', '/api/products', { name: 'ناود Tea 250g', sale_price: 120, barcode: '9550001112223', opening_stock: 10 }, token);
+    const sale = await call('POST', '/api/sales', {
+      items: [{ barcode: '9550001112223', qty: 2 }],
+      payments: [{ method: 'cash', amount: 250 }],
+    }, token);
+    assert.equal(sale.status, 201, 'the sale used for printing exists');
+
+    const key = sale.payload.sale.uuid;
+
+    // The browser path: a model and a ready-to-print text receipt.
+    const receipt = await call('GET', `/api/print/receipt/${key}`, null, token);
+    assert.equal(receipt.status, 200);
+    assert.ok(receipt.payload.text.includes('TOTAL'), 'the text receipt has a total');
+    assert.ok(receipt.payload.text.includes(sale.payload.sale.device_invoice_no), 'the receipt carries its number');
+    assert.equal(receipt.payload.model.items.length, 1, 'the model carries its lines');
+    assert.equal(receipt.payload.printer.printer_mode, 'dialog', 'the default printer mode is the browser dialog');
+
+    // The ESC/POS bytes: init first, cut last, drawer kick on demand, ASCII-safe.
+    const bytes = renderEscPos(receipt.payload.model, { drawerKick: true });
+    assert.deepEqual([bytes[0], bytes[1]], [0x1b, 0x40], 'the receipt starts with ESC @ (printer init)');
+    assert.equal(bytes.indexOf(Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa])) !== -1, true, 'the drawer kick command is there when asked');
+    assert.ok(bytes.includes(Buffer.from('TOTAL')), 'the total is on the receipt');
+    assert.ok(bytes.includes(Buffer.from('Tea 250g')), 'the ASCII part of a Dari product name still prints');
+    const cutTail = bytes.subarray(bytes.length - 4);
+    assert.equal(cutTail[0], 0x1d, 'the receipt ends with the cut command (GS V)');
+
+    // Text bytes must never leak non-ASCII to a code-page starved printer
+    // (control parameters like the 0xFA drawer timing are not text).
+    const noDrawer = renderEscPos(receipt.payload.model, { drawerKick: false });
+    const textBytes = Buffer.concat([
+      noDrawer.subarray(noDrawer.indexOf(0x0a) + 1, noDrawer.indexOf(Buffer.from('TOTAL'))),
+    ]);
+    assert.ok(!textBytes.some((byte) => byte > 0x7e), 'Dari degrades to ??? in text, never garbage bytes');
+
+    // In dialog mode the raw endpoint refuses honestly instead of pretending.
+    const wrongMode = await call('POST', '/api/print/receipt', { sale_uuid: key }, token);
+    assert.equal(wrongMode.status, 409, 'raw printing in dialog mode is a configuration answer, not a crash');
+
+    // Raw mode with no share configured is also an honest answer.
+    await call('PUT', '/api/settings', { printer_mode: 'raw' }, token);
+    const noShare = await call('POST', '/api/print/receipt', { sale_uuid: key }, token);
+    assert.equal(noShare.status, 409, 'a missing share name is explained');
+
+    // With a share set, non-Windows platforms are told to keep the dialog path.
+    await call('PUT', '/api/settings', { printer_share: 'POS80' }, token);
+    const rawPrint = await call('POST', '/api/print/receipt', { sale_uuid: key }, token);
+    assert.equal(rawPrint.status, process.platform === 'win32' ? 200 : 501, 'raw printing reports its platform honestly');
+
+    // The sale a failed print belongs to is, of course, still there.
+    const again = await call('GET', `/api/sales/${key}`, null, token);
+    assert.equal(again.status, 200, 'a failed print never touches the sale');
+
+    // The test receipt in dialog mode comes back for the browser to print.
+    await call('PUT', '/api/settings', { printer_mode: 'dialog' }, token);
+    const testPrint = await call('POST', '/api/print/test', {}, token);
+    assert.equal(testPrint.payload.mode, 'dialog');
+    assert.ok(testPrint.payload.text.includes('TEST'), 'the test receipt is labelled as a test');
+
+    const settings = await call('GET', '/api/settings');
+    assert.equal(settings.payload.printer_share, 'POS80', 'printer settings survive a round trip');
+    assert.equal(settings.payload.printer_mode, 'dialog');
+  } finally {
+    till.stop();
+    till.till.db.close();
+    if (previousDataEnv === undefined) delete process.env.SOFTCORA_DATA;
+    else process.env.SOFTCORA_DATA = previousDataEnv;
   }
 });
 

@@ -111,15 +111,47 @@ syncing with no duplicates; a lost response; a rejected change that keeps its
 place; incremental pulls; backup and restore; and two tills selling at once.
 
 ```
-npm test     # 16/16 checks
+npm test     # 18/18 checks
 ```
+
+## Logs
+
+Four channelled log files live next to the data directory
+(`%LOCALAPPDATA%\SoftCoraPOS\logs` when installed): `application.log`,
+`sync.log`, `error.log`, `security.log` — 2 MB each with three generations of
+rollover, and no secrets ever written (`test/e2e.mjs` proves a known password
+never appears). Signed-in staff can read tails at `GET /api/logs/{channel}`.
+
+## Printing
+
+Receipts print offline, two ways (*Settings → Receipt printer*):
+
+- **Browser print dialog** (default) — a formatted 80 mm window; any printer
+  Windows knows, full Unicode (Dari/Pashto receipts).
+- **Silent thermal (Windows)** — ESC/POS bytes to a shared printer
+  (`printer_share`, e.g. `POS80`), no dialog, optional cash-drawer kick; ASCII
+  receipts. `POST /api/print/receipt` / `POST /api/print/test`.
+
+A sale is committed before printing is ever attempted — printer faults are
+screen messages, never data problems.
+
+## Documentation
+
+Full production docs live in the repository root `docs/`: `OFFLINE_ARCHITECTURE.md`,
+`OFFLINE_DATABASE.md`, `SYNC_ENGINE.md`, `OFFLINE_SECURITY.md`,
+`OFFLINE_TESTING.md`, `INSTALLATION.md`, `TROUBLESHOOTING.md`, `RELEASE.md`.
 
 ## Desktop packaging
 
 The service is deliberately shell-agnostic: the till screen is plain HTML/JS
 served locally, and every operation is an HTTP call on `127.0.0.1`. The Windows
-build (Tauri + Vue 3 + Quasar + TypeScript, or any wrapper) supplies the window,
-the printer and the updater, and must obey three rules the code already enforces:
-never recreate the SQLite file, never drop `sync_queue`, never change the device
-id. `node src/cli.mjs verify` is the gate an installer runs before replacing
-files.
+deliverable is a **Node single-executable** (no wrapper runtime): the service
+plus the embedded screen inside `SoftCora-POS.exe`. Whatever shell packages it
+must obey three rules the code already enforces: never recreate the SQLite
+file, never drop `sync_queue`, never change the device id.
+`node src/cli.mjs verify` is the gate an installer runs before replacing files.
+
+`installer/build-windows.sh` produces **dist/SoftCora-POS-Setup.exe** — a real
+self-extracting installer (per-user, no admin, shortcuts, Apps & Features
+entry, data-preserving upgrades, uninstall) plus a portable zip and checksums.
+Details: [docs/WINDOWS-INSTALLER.md](docs/WINDOWS-INSTALLER.md).
