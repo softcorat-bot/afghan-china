@@ -114,9 +114,18 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $payload = (Resolve-Path offline\installer\payload).Path
 
-          & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $payload 'verify.ps1') -Json | Out-Null
-          if ($LASTEXITCODE -ne 1) { throw ("verify.ps1 should report 'not installed' with exit 1, exited " + $LASTEXITCODE) }
-          Write-Host '  ok  verify.ps1 runs and reports that nothing is installed'
+          $json = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $payload 'verify.ps1') -Json
+          $code = $LASTEXITCODE
+          # The Actions 'powershell' shell ends the step with $LASTEXITCODE, and
+          # exit 1 is what this step is asking for - so clear it and judge the
+          # code here instead of letting it fail the step.
+          $global:LASTEXITCODE = 0
+
+          if ($code -ne 1) { throw ("verify.ps1 should report 'not installed' with exit 1, exited " + $code) }
+          $report = ($json -join "`n") | ConvertFrom-Json
+          if ($report.installed) { throw 'verify.ps1 reports an installation on a machine that has none' }
+          if (@($report.problems).Count -eq 0) { throw 'verify.ps1 exited 1 without saying what is wrong' }
+          Write-Host ('  ok  verify.ps1 runs, reports that nothing is installed, and says why: ' + @($report.problems)[0])
 
       - name: Run install.ps1 against an incomplete payload
         shell: powershell
@@ -136,6 +145,7 @@ jobs:
           # stopped, because that log is all a shop can send us.
           & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $broken 'install.ps1') -Silent -NoLaunch | Out-Null
           $code = $LASTEXITCODE
+          $global:LASTEXITCODE = 0   # as above: exit 1 is the expected answer, not a failed step
           Remove-Item -LiteralPath $broken -Recurse -Force -ErrorAction SilentlyContinue
 
           if ($code -ne 1) { throw ("install.ps1 should refuse an incomplete payload with exit 1, exited " + $code) }
