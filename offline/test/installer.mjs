@@ -357,7 +357,13 @@ await step('the built installer is run on Windows before it can ship', () => {
   assert.match(verifierCode, /Write-Annotation -Title 'verify-windows' -Message \(\$check\.name/, 'every failed check must be annotated, not just the thrown ones');
   assert.ok(!/2>&1/.test(verifierCode), "a native command's stderr must not be merged into the pipeline: it can end the script with no report");
 
-  assert.match(until, /-Install -Report \$report/, 'the CI job must keep the verification report as a file');
+  assert.match(until, /-Install -ReportPath \$report/, 'the CI job must keep the verification report as a file');
+  // Windows PowerShell has one namespace for variables: while the parameter was
+  // called -Report and the health report of the installed copy lived in
+  // `$report`, assigning the second silently overwrote the first, and the file
+  // the job asked for was never written. The names must not be able to meet.
+  assert.match(verifier, /\[string\]\$ReportPath = ''/, 'the report parameter must not collide with the health report variable');
+  assert.ok(!/\$report\s*=/.test(verifierCode), 'nothing may assign to $report: that is the report path parameter');
   assert.match(until, /name: windows-verification/, 'the report must be uploaded, failed or not');
   assert.match(until, /if: always\(\)/, 'the report must be kept even when the verification fails');
 

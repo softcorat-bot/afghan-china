@@ -247,10 +247,10 @@ jobs:
           $summary = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
           $report = (Join-Path (Get-Location) 'windows-verification.json')
 
-          # -Report writes the result where the next step can find it whichever
-          # way this goes, because the job's log is not always readable - the
-          # annotations the verifier emits are what survives.
-          & powershell -NoProfile -ExecutionPolicy Bypass -File offline\installer\verify-windows.ps1 -Installer $installer -Install -Report $report
+          # -ReportPath writes the result where the next step can find it
+          # whichever way this goes, because the job's log is not always readable
+          # - the annotations the verifier emits are what survives.
+          & powershell -NoProfile -ExecutionPolicy Bypass -File offline\installer\verify-windows.ps1 -Installer $installer -Install -ReportPath $report
           $code = $LASTEXITCODE
           $global:LASTEXITCODE = 0   # the exit code is judged here, not by the shell
 

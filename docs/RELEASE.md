@@ -77,7 +77,7 @@ published. See `offline/docs/WINDOWS-INSTALLER.md` → *The blob and the runtime
    so a build whose program does not start cannot reach a release page. When it
    goes red, read the run's annotations and the `windows-verification` artifact
    (not just the log): every failed check is annotated with what it expected and
-   what it saw, and `-Report` keeps the whole report as a file.
+   what it saw, and `-ReportPath` keeps the whole report as a file.
 4. Checksums recorded (`sha256.txt`) — paste them into the release notes issue.
 5. **Windows bench verification** (VM or a bench PC, once per release — the parts
    a runner cannot do: SmartScreen, shortcuts as a user sees them, uninstall,

@@ -266,7 +266,7 @@ runner with nothing but `Process completed with exit code 1` in the run's
 annotations, and its log could not be downloaded at all — a failure nobody can
 act on. So the verifier now reports itself three ways: every failed check becomes
 a workflow annotation (visible on the run and through the API), the whole report
-is the step summary, and `-Report <path>` writes it to a file, which the job keeps
+is the step summary, and `-ReportPath <path>` writes it to a file, which the job keeps
 as the `windows-verification` artifact. It also reports a *thrown* error like a
 failed check, naming the line it came from, and it never merges a native command's
 stderr into the pipeline (`Start-Process` and two files instead): under

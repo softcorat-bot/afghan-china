@@ -43,9 +43,13 @@
                         (this writes to this PC's user profile - use it on a
                         throw-away VM, a CI runner or a bench PC)
       -Json             print one machine-readable object instead of the report
-      -Report <path>    also write that object to a file (CI keeps it as an
+      -ReportPath <p>   also write that object to a file (CI keeps it as an
                         artifact, so a failure can be read after the runner is
-                        gone)
+                        gone). Named -ReportPath, not -Report: Windows
+                        PowerShell has one namespace for variables, and this
+                        script already keeps the health report in `$report` -
+                        the parameter was silently overwritten by it, and the
+                        report the caller asked for was never written
       -Port <n>         port for the till the checks start (default 7821)
 
     On a GitHub runner every failed check is also emitted as a workflow
@@ -70,7 +74,7 @@ param(
     [string]$Exe,
     [switch]$Install,
     [switch]$Json,
-    [string]$Report = '',
+    [string]$ReportPath = '',
     [int]$Port = 7821
 )
 
@@ -153,7 +157,7 @@ function Complete-Run {
 
     # Failures are said out loud three ways, because the person who has to fix
     # the next one may have nothing but the run's annotations to go on: one
-    # annotation per failed check, the report on disk for -Report, and the whole
+    # annotation per failed check, the report on disk for -ReportPath, and the whole
     # report as the step summary.
     foreach ($check in $script:Reports) {
         if (-not $check.ok) { Write-Annotation -Title 'verify-windows' -Message ($check.name + ': ' + $check.detail) }
@@ -167,12 +171,12 @@ function Complete-Run {
     }
     Write-StepSummary ($lines -join "`n")
 
-    if ($Report) {
+    if ($ReportPath) {
         try {
-            ([pscustomobject]@{ ok = $ok; checks = $script:Reports } | ConvertTo-Json -Depth 5) | Out-File -LiteralPath $Report -Encoding utf8
+            ([pscustomobject]@{ ok = $ok; checks = $script:Reports } | ConvertTo-Json -Depth 5) | Out-File -LiteralPath $ReportPath -Encoding utf8
         }
         catch {
-            Write-Annotation -Title 'verify-windows' -Message ('the report could not be written to ' + $Report + ': ' + [string]$_.Exception.Message)
+            Write-Annotation -Title 'verify-windows' -Message ('the report could not be written to ' + $ReportPath + ': ' + [string]$_.Exception.Message)
             $ok = $false
         }
     }
@@ -670,14 +674,16 @@ if ($Install -and $workRoot -and $payloadRoot) {
         -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $installedRoot 'app\verify.ps1'), '-Json') `
         -DataPath $shopData `
         -TimeoutSeconds 180
-    $report = Get-ParsedJson $health.StdOut
+    # $healthReport, not $report: the -ReportPath parameter is the same variable
+    # as $reportPath, not as this one, and the two must not be able to meet.
+    $healthReport = Get-ParsedJson $health.StdOut
     $reportKind = 'nothing'
-    if ($null -ne $report) { $reportKind = $report.GetType().Name }
+    if ($null -ne $healthReport) { $reportKind = $healthReport.GetType().Name }
 
     # The report is JSON this repository writes itself, so the text is evidence
     # in its own right: if the parse produced something unexpected, the words
     # still say whether the till is installed.
-    $installedFromReport = ($null -ne $report -and $null -ne $report.PSObject.Properties['installed'] -and $report.installed -eq $true)
+    $installedFromReport = ($null -ne $healthReport -and $null -ne $healthReport.PSObject.Properties['installed'] -and $healthReport.installed -eq $true)
     $installedFromText = ($health.StdOut -match '"installed"\s*:\s*true')
     $healthOk = ($health.ExitCode -eq 0 -and ($installedFromReport -or $installedFromText))
 
@@ -688,13 +694,13 @@ if ($Install -and $workRoot -and $payloadRoot) {
     $healthDetail += ', stdout ' + $health.StdOut.Length + ' chars, stderr ' + $health.StdErr.Length + ' chars'
     $healthDetail += ', parsed as ' + $reportKind
     if ($installedFromReport) {
-        $healthDetail += ', version ' + $report.version + ', problems ' + @($report.problems).Count
+        $healthDetail += ', version ' + $healthReport.version + ', problems ' + @($healthReport.problems).Count
     }
     $healthDetail += ', output ends: ' + (Summarise-OutputTail ($health.StdErr + ' ' + $health.StdOut))
     Add-Check -Name 'verify.ps1 reports the installation as healthy' -Ok $healthOk -Detail $healthDetail
 
     $installedVersion = ''
-    if ($null -ne $report -and $report.version) { $installedVersion = [string]$report.version }
+    if ($null -ne $healthReport -and $healthReport.version) { $installedVersion = [string]$healthReport.version }
     else {
         $found = [regex]::Match($health.StdOut, '"version"\s*:\s*"([^"]+)"')
         if ($found.Success) { $installedVersion = $found.Groups[1].Value }
