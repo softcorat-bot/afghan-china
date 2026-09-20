@@ -108,7 +108,10 @@ documented protocol (idempotency ledger, one row per entity uuid, cursor pull).
 It covers: 20 offline sales + 5 customers + 3 returns + stock movements + two
 drawer sessions; a restart; a dead server; activation; a full sync; repeated
 syncing with no duplicates; a lost response; a rejected change that keeps its
-place; incremental pulls; backup and restore; and two tills selling at once.
+place; incremental pulls; backup and restore; two tills selling at once;
+channelled log files that provably contain no secrets; and receipt printing
+(text + ESC/POS rendering, honest failure modes, a failed print never touching
+a sale).
 
 ```
 npm test     # 18/18 checks
