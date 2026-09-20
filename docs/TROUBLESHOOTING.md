@@ -32,6 +32,19 @@ nothing and never touches `data\`, so a failed setup cannot lose a sale.
 | `port 7817 is already used by another program` (a warning) | Something else on the PC listens on the till's port | The install still finishes. Unzip `SoftCoraPOS-portable-win64.zip` and run `install.cmd -Port 7820` from that folder to move the till |
 | `The running till could not be stopped` | A stuck process holds the program files | End `SoftCora-POS.exe` in Task Manager, run the setup again |
 
+## "The Windows verification job failed" (CI, not a shop)
+
+`windows-installer` in `offline-till.yml` takes the installer that run built and
+runs it on a Windows runner. A red run is read from the **annotations** on the
+run and from the `windows-verification` artifact — not from the job log, which is
+not always downloadable. `installer/verify-windows.ps1` annotates every failed
+check with what it expected and what it saw, writes the same report as the step
+summary, and keeps it as a file (`-Report`) whichever way the run goes; if the
+script itself throws, that is reported as a failed check too, with the line it
+came from. To reproduce by hand, run the same script on a Windows PC with
+`-Installer <setup.exe> -Install` — the report names the check, so the failing
+step does not have to be guessed.
+
 Exit codes, if a script drives the setup: `0` installed, `3` installed but not
 launched (`-NoLaunch`), `1` failed. `install.cmd` treats anything else as a
 failure and pauses with the log's location on screen.

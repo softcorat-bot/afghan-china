@@ -343,6 +343,24 @@ await step('the built installer is run on Windows before it can ship', () => {
   assert.match(until, /needs: package/, 'the Windows job must check the artifact the build job produced, not rebuild it');
   assert.match(until, /ParseFile/, 'the verifier must be parsed by the Windows PowerShell that runs it');
 
+  // A run that goes red has to be readable afterwards. The first run of this
+  // job failed with nothing but "Process completed with exit code 1" in the
+  // run's annotations - the log itself could not be downloaded at all - which
+  // is a failure nobody can act on. So: the verifier reports a thrown error
+  // like a failed check, every failed check becomes a workflow annotation, the
+  // report is written to a file the job keeps, and a native command's stderr is
+  // never merged into the pipeline under $ErrorActionPreference = 'Stop' (in
+  // Windows PowerShell 5.1 that can end the script with no report at all).
+  const verifierCode = codeOnly(verifier);
+  assert.match(verifierCode, /^trap \{/m, 'the verifier must report even when something unforeseen throws');
+  assert.match(verifierCode, /::\{0\} title=\{1\}::\{2\}/, 'a failed check must reach the run as an annotation');
+  assert.match(verifierCode, /Write-Annotation -Title 'verify-windows' -Message \(\$check\.name/, 'every failed check must be annotated, not just the thrown ones');
+  assert.ok(!/2>&1/.test(verifierCode), "a native command's stderr must not be merged into the pipeline: it can end the script with no report");
+
+  assert.match(until, /-Install -Report \$report/, 'the CI job must keep the verification report as a file');
+  assert.match(until, /name: windows-verification/, 'the report must be uploaded, failed or not');
+  assert.match(until, /if: always\(\)/, 'the report must be kept even when the verification fails');
+
   const publish = read(path.join(offlineDir, '..', '.github', 'workflows', 'publish-release-assets.yml'));
   assert.match(publish, /needs: \[build, verify-windows\]/, 'nothing may be published before the built installer has run on Windows');
   assert.match(publish, /name: installer-dist/, 'the bytes that are verified must be the bytes that are published');

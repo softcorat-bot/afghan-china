@@ -245,8 +245,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $installer = (Resolve-Path offline\dist\SoftCora-POS-Setup.exe).Path
           $summary = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          $report = (Join-Path (Get-Location) 'windows-verification.json')
 
-          & powershell -NoProfile -ExecutionPolicy Bypass -File offline\installer\verify-windows.ps1 -Installer $installer -Install
+          # -Report writes the result where the next step can find it whichever
+          # way this goes, because the job's log is not always readable - the
+          # annotations the verifier emits are what survives.
+          & powershell -NoProfile -ExecutionPolicy Bypass -File offline\installer\verify-windows.ps1 -Installer $installer -Install -Report $report
           $code = $LASTEXITCODE
           $global:LASTEXITCODE = 0   # the exit code is judged here, not by the shell
 
@@ -254,3 +258,29 @@ jobs:
             throw ("the installer did not verify on Windows (exit " + $code + ", sha256 " + $summary + ")")
           }
           Write-Host ('  ok  SoftCora-POS-Setup.exe ran, served its screen and installed itself (sha256 ' + $summary + ')')
+
+      - name: Say what the verification found, whichever way it went
+        if: always()
+        shell: powershell
+        run: |
+          $report = 'windows-verification.json'
+          if (-not (Test-Path -LiteralPath $report)) {
+            Write-Host 'the verifier wrote no report - read the job log above'
+            exit 0
+          }
+
+          $parsed = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          Write-Host ("  ok=" + $parsed.ok + ", " + @($parsed.checks).Count + ' checks')
+          foreach ($check in @($parsed.checks)) {
+            $mark = 'ok  '
+            if (-not $check.ok) { $mark = 'FAIL' }
+            Write-Host ('  ' + $mark + ' ' + $check.name + ' - ' + $check.detail)
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-verification
+          if-no-files-found: warn
+          retention-days: 7
+          path: windows-verification.json

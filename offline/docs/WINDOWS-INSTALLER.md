@@ -218,6 +218,18 @@ is reported as `unknown` instead of an empty pair of brackets, and an abort
 inside its own runtime is called what it is — a build that must be replaced, not
 retried.
 
+**Reading a red run.** The first run of the `windows-installer` job failed on the
+runner with nothing but `Process completed with exit code 1` in the run's
+annotations, and its log could not be downloaded at all — a failure nobody can
+act on. So the verifier now reports itself three ways: every failed check becomes
+a workflow annotation (visible on the run and through the API), the whole report
+is the step summary, and `-Report <path>` writes it to a file, which the job keeps
+as the `windows-verification` artifact. It also reports a *thrown* error like a
+failed check, naming the line it came from, and it never merges a native command's
+stderr into the pipeline (`Start-Process` and two files instead): under
+`$ErrorActionPreference = 'Stop'`, Windows PowerShell 5.1 can turn that into a
+terminating error that ends the script with no report at all.
+
 ## Publishing it as a release
 
 Everything the release needs is in `offline/dist/` after a build:
