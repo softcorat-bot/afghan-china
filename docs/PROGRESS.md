@@ -1065,3 +1065,37 @@ Tests: `npm test` → 18/18 e2e + **14/14** installer checks; the e2e suite was
 also re-run under node 26.9.0 (the runtime the till ships) → 18/18. Re-cut as
 1.0.0 build 2: version unchanged, notes rewritten, assets replaced, checksums
 different.
+
+## 2026-09-20 — Installer build 3: a working program's exit code could not be read
+
+Build 2's blob/runtime pairing was right, and the new acceptance job proved it
+within minutes of its first run — the packaged program started, created its
+database and answered `--cli status` with its own JSON. The install still
+stopped, on the runner and would have stopped on the shop's PC, with
+
+```
+install.log: [ERROR] SoftCora-POS.exe did not run on this PC (exit unknown).
+             { "device_id": "SC-POS-28FE51", "state": "offline", ... }   <- its own healthy status
+```
+
+Root cause: in Windows PowerShell 5.1 the process object `Start-Process -PassThru`
+returns never reports `ExitCode` — it comes back empty even after
+`WaitForExit($ms)` returns true. `install.ps1`'s probe compared that `$null` with
+zero, `$null -ne 0` is true, and the installer concluded the program had failed.
+The empty `(exit )` in the first field report from the shop came out of the same
+hole; `verify.ps1` had it too and reported healthy installs as *problems*
+(exit 2). Neither the Linux suites nor the build self-test could see it: the
+quirk exists only in Windows PowerShell, and only the new `windows-installer` job
+executes the real `.exe`.
+
+| Item | What changed | Verified by |
+|---|---|---|
+| Running the till | `install.ps1`, `verify.ps1` and `installer/verify-windows.ps1` run it through `System.Diagnostics.Process` (`UseShellExecute=$false`, redirected streams read asynchronously, `WaitForExit($ms)` then `WaitForExit()`), which reports the exit code it was given | new `test/installer.mjs` check, proven to fail when `Start-Process` is put back |
+| Deciding whether it ran | the probe treats *the program answering with its own status* as proof it runs; an unreadable code is `unknown` and is logged as a warning, not a failure. A program that prints nothing — blocked, quarantined, or built against the wrong runtime — still fails the check | same check: the probe must contain the JSON test and the readable/unreadable distinction |
+| `verify.ps1` | only a code that was read *and* is not zero counts as a problem, so a healthy install cannot report one | run by the acceptance job's install phase |
+| CI readability | every failed check in `verify-windows.ps1` becomes a workflow annotation, the report becomes the step summary and the `windows-verification` artifact (`-Report`), and an unforeseen error is reported like a failed check — the first red run of that job had nothing but "Process completed with exit code 1" in its annotations and a log that could not be downloaded at all | `test/installer.mjs`; used to diagnose this very fault |
+
+Tests: `npm test` → 18/18 e2e + **15/15** installer checks (each new guard
+proven to fail when its fault is put back). To be re-cut as 1.0.0 build 3 once
+the `windows-installer` job is green: version unchanged, notes rewritten (build 3
+entry), assets replaced, checksums different.

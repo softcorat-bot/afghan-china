@@ -2,7 +2,7 @@
 
 ## 1. Pre-flight
 
-- [ ] `cd offline && npm test` → **18/18** end-to-end checks and **14/14**
+- [ ] `cd offline && npm test` → **18/18** end-to-end checks and **15/15**
       installer checks
 - [ ] `cd offline && npm run check:installer` → the Windows payload is ASCII,
       CRLF, marked correctly and parses in both readings. CI runs the same check
@@ -136,7 +136,7 @@ future installer build that goes through the workflow updates it.
 For a packaging bug that never worked on a real PC, the version is not the
 problem, so it does not move. What has to change is the bytes and the story:
 
-1. Fix on a branch. `npm test` (18/18 + 14/14) and `npm run check:installer`
+1. Fix on a branch. `npm test` (18/18 + 15/15) and `npm run check:installer`
    green, plus whatever new check would have caught the bug — a re-cut without
    a new guard invites the same re-cut.
 2. Rewrite `offline/docs/RELEASE-NOTES-<version>.md` for the re-cut: what was
@@ -159,10 +159,16 @@ problem, so it does not move. What has to change is the bytes and the story:
 5. Tell everyone who has the old file, by the channel they got it from, that
    the checksums changed and to download again.
 
-1.0.0 has been re-cut twice, for two different packaging faults — a payload
-Windows PowerShell misread (1.0.0 build 1) and a SEA blob written by the wrong
-Node version (1.0.0 build 2). The notes carry both stories; the version did not
-move for either, because the till itself never changed.
+1.0.0 has been re-cut three times, for three different packaging faults — a
+payload Windows PowerShell misread (build 1), a SEA blob written by the wrong
+Node version (build 2), and an installer that could not read a working program's
+exit code (build 3: Windows PowerShell 5.1 leaves `ExitCode` empty on a process
+object from `Start-Process -PassThru`, and `install.ps1` read that as "the
+program failed"). The notes carry all three stories; the version did not move for
+any of them, because the till itself never changed. Build 2 and build 3 are also
+the reason the pipeline now *runs the built installer on Windows* before it
+publishes anything: neither fault was visible to any check that did not execute
+the real `.exe`.
 
 ## 4. Versioning & compatibility rules (don't break these)
 
@@ -199,7 +205,7 @@ move for either, because the till itself never changed.
 ## 6. Release checklist summary
 
 ```
-npm test (18/18 + 14/14)  →  npm run check:installer  →  quasar build
+npm test (18/18 + 15/15)  →  npm run check:installer  →  quasar build
 →  VERSION.txt + release notes  →  build-windows.sh  →  verify artifacts +
 checksums  →  verify-windows.ps1 (CI does this before publishing)  →
 Windows bench test for the parts a runner cannot do  →  gh release (workflow)  →

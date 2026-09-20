@@ -6,9 +6,9 @@ returns, customers, stock movements, drawer sessions, reports and backups all
 run against a local SQLite database. Sync hands the work over to the central
 server; it never makes selling possible.
 
-> **Re-published twice on 2026-09-20 — download 1.0.0 again if your copy is
-> older than this page.** Two different packaging faults each stopped setup on a
-> real PC while every check in the build pipeline passed:
+> **Re-published three times on 2026-09-20 — download 1.0.0 again if your copy
+> is older than this page.** Three different packaging faults each stopped setup
+> on a real PC while every check in the build pipeline passed:
 >
 > 1. **Build 1 — the installer scripts were misread.** They were UTF-8 without a
 >    byte-order mark and contained typographic dashes. Windows PowerShell 5.1
@@ -23,12 +23,26 @@ server; it never makes selling possible.
 >    `Assertion failed: (format_value) <= (static_cast<uint8_t>(ModuleFormat::kModule))`
 >    (in `SeaDeserializer::Read`). Setup stopped with *"SoftCora-POS.exe did not
 >    run on this PC"*, changed nothing, and left the data folder alone.
+> 3. **Build 3 — the installer could not read a working program's exit code.**
+>    Build 2's packaging was right — the embedded program ran and answered — but
+>    Windows PowerShell 5.1 does not fill in `ExitCode` on the process object
+>    `Start-Process -PassThru` returns. The installer took "no exit code" for
+>    "the program failed" and stopped anyway, with `(exit unknown)` in
+>    `install.log` and the program's own healthy status printed right beside it.
+>    That is where the empty `(exit )` in the first report from a shop came from,
+>    and the code is now read out of a .NET process object instead: a program
+>    that answers with its own status counts as running even when Windows reports
+>    no code, while a program that prints nothing at all — blocked, quarantined
+>    or built against the wrong runtime — still fails the check. `verify.ps1`,
+>    which had the same hole and reported healthy installs as problems, was fixed
+>    with it.
 >
 > **If you downloaded 1.0.0 before this page was last published, download it
 > again**: the bytes and the checksums below are different. This build is also
 > the first one that CI *ran on Windows* — unpacked, started, installed and
-> health-checked — before it was published. The till itself has not changed; both
-> faults were in how the installer and its program were packaged.
+> health-checked — before it was published; build 3 is the build in which that
+> check went green. The till itself has not changed: all three faults were in how
+> the installer and its program were packaged.
 >
 > Because the version did not change, the `v1.0.0` tag still points at the commit
 > that shipped the first broken build; the assets on this release page were
@@ -135,10 +149,11 @@ anything wrong listed under *Problems found*. It changes nothing. Exit codes:
   channel with no secrets inside; receipts in text and ESC/POS; and the screen
   referring only to elements that exist). The suite is also run under
   **node 26.9.0**, the runtime this installer carries.
-* **14/14 installer checks**, including three that were added because of the two
+* **15/15 installer checks**, including the ones that were added because of the
   faults above — and each of which is proven to *fail* when its fault is put
   back: a typographic dash in a payload script; a SEA blob written or self-tested
-  by the build host's own Node; and a publish workflow that does not wait for the
+  by the build host's own Node; an installer that reads a blank Windows exit code
+  as the program failing; and a publish workflow that does not wait for the
   Windows check.
 * `installer/check-payload.mjs` on the packed payload, read back out of the
   finished `SoftCora-POS-Setup.exe`: ASCII with zero non-ASCII bytes, UTF-8

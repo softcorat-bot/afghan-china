@@ -169,9 +169,6 @@ function Invoke-TillCli {
         [int]$TimeoutSeconds = 120
     )
 
-    $outFile = Join-Path $env:TEMP ('softcora-out-' + [guid]::NewGuid().ToString('n') + '.txt')
-    $errFile = Join-Path $env:TEMP ('softcora-err-' + [guid]::NewGuid().ToString('n') + '.txt')
-
     # The child inherits this process' environment, so the variables are set here
     # and put back afterwards; nothing else in the install may see them.
     $wanted = @{ 'SOFTCORA_DATA' = $DataPath; 'SOFTCORA_HOST' = '127.0.0.1' }
@@ -181,17 +178,43 @@ function Invoke-TillCli {
         [Environment]::SetEnvironmentVariable($name, $wanted[$name])
     }
 
-    $result = [pscustomobject]@{ ExitCode = -1; StdOut = ''; StdErr = ''; TimedOut = $false }
+    $result = [pscustomobject]@{ ExitCode = $null; StdOut = ''; StdErr = ''; TimedOut = $false }
+
+    # System.Diagnostics.Process, never Start-Process -PassThru: in Windows
+    # PowerShell 5.1 a process object from Start-Process reports no ExitCode at
+    # all once the wait has passed, and this installer read "no exit code" as
+    # "the program failed". On a Windows runner that refused a program which had
+    # just answered with its own status JSON - an install stopped on a machine
+    # where nothing was wrong. The .NET object reports the code it was given.
+    #
+    # Both streams are read while the program runs: reading a redirected pipe
+    # only after the process exits can deadlock on a program that fills it.
+    $outTask = $null
+    $errTask = $null
 
     try {
-        $process = Start-Process -FilePath $Exe `
-            -ArgumentList $Arguments `
-            -WorkingDirectory (Split-Path -Parent $Exe) `
-            -NoNewWindow -PassThru `
-            -RedirectStandardOutput $outFile `
-            -RedirectStandardError $errFile
+        $info = New-Object System.Diagnostics.ProcessStartInfo
+        $info.FileName = $Exe
+        $info.Arguments = (($Arguments | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }) -join ' ')
+        $info.WorkingDirectory = (Split-Path -Parent $Exe)
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $info.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $info
+        [void]$process.Start()
+
+        $outTask = $process.StandardOutput.ReadToEndAsync()
+        $errTask = $process.StandardError.ReadToEndAsync()
 
         if ($process.WaitForExit($TimeoutSeconds * 1000)) {
+            # The wait without a timeout is what lets the asynchronous readers
+            # finish; only then are the last bytes on their way.
+            $process.WaitForExit()
             $result.ExitCode = $process.ExitCode
         }
         else {
@@ -200,12 +223,16 @@ function Invoke-TillCli {
             try { $process.WaitForExit(5000) | Out-Null } catch { }
         }
 
-        if (Test-Path -LiteralPath $outFile) { $result.StdOut = [string](Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue) }
-        if (Test-Path -LiteralPath $errFile) { $result.StdErr = [string](Get-Content -LiteralPath $errFile -Raw -ErrorAction SilentlyContinue) }
+        if ($outTask -and $outTask.Wait(10000)) { $result.StdOut = [string]$outTask.Result }
+        if ($errTask -and $errTask.Wait(10000)) { $result.StdErr = [string]$errTask.Result }
+    }
+    catch {
+        # A program that cannot even be started says so here, and the caller
+        # decides what that means: an install may still continue without it.
+        $result.StdErr = ([string]$_.Exception.Message + ' ' + $result.StdErr).Trim()
     }
     finally {
         foreach ($name in $previous.Keys) { [Environment]::SetEnvironmentVariable($name, $previous[$name]) }
-        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
     }
 
     return $result
@@ -338,7 +365,17 @@ finally {
 }
 
 if ($probe.TimedOut) { Fail ('{0} did not answer within 120 seconds.' -f $ExeName) }
-if ($probe.ExitCode -ne 0) {
+
+# What proves the program runs is the program answering - its own status, with
+# its own words - not a number taken on trust. Windows does not always report a
+# child's exit code (see Invoke-TillCli), and when it does not, the answer in
+# the output is the evidence: a program that was blocked, quarantined or built
+# against the wrong runtime prints nothing at all, and still fails here.
+$exitCodeRead = ($null -ne $probe.ExitCode)
+$programAnswered = ($probe.StdOut -match '"device_id"')
+$programRan = (($exitCodeRead -and $probe.ExitCode -eq 0) -or ((-not $exitCodeRead) -and $programAnswered))
+
+if (-not $programRan) {
     # What the program said, in full, as log lines - and in one line for the
     # message. A program that aborts does not always report an exit code, and
     # "(exit )" is not a detail a shop can act on, so a missing one is named.
@@ -362,6 +399,10 @@ if ($probe.ExitCode -ne 0) {
     }
 
     Fail ('{0} did not run on this PC (exit {1}). {2}{3}' -f $ExeName, $probeCode, $detail, $cause)
+}
+
+if (-not $exitCodeRead) {
+    Write-Log 'Windows did not report an exit code for the program, but it answered with its own status: it runs' 'WARN'
 }
 Write-Log 'the packaged program runs' 'OK'
 

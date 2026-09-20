@@ -219,16 +219,38 @@ function Invoke-Program {
         [int]$TimeoutSeconds = 120
     )
 
-    $outFile = Join-Path $env:TEMP ('softcora-out-' + [guid]::NewGuid().ToString('n') + '.txt')
-    $errFile = Join-Path $env:TEMP ('softcora-err-' + [guid]::NewGuid().ToString('n') + '.txt')
     $result = [pscustomobject]@{ ExitCode = $null; StdOut = ''; StdErr = ''; TimedOut = $false }
 
     $previous = Set-ChildEnvironment -Environment (New-ChildEnvironment -DataPath $DataPath -Environment $Environment)
 
+    # System.Diagnostics.Process, not Start-Process -PassThru: in Windows
+    # PowerShell 5.1 the process object Start-Process returns reports no
+    # ExitCode, which is why this verifier's first run called a healthy program
+    # "exited without reporting a code" and the installer it was checking
+    # refused a program that had answered correctly.
+    $outTask = $null
+    $errTask = $null
+
     try {
-        $process = Start-Process -FilePath $Path -ArgumentList $Arguments -NoNewWindow -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+        $info = New-Object System.Diagnostics.ProcessStartInfo
+        $info.FileName = $Path
+        $info.Arguments = (($Arguments | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }) -join ' ')
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $info.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $info
+        [void]$process.Start()
+
+        $outTask = $process.StandardOutput.ReadToEndAsync()
+        $errTask = $process.StandardError.ReadToEndAsync()
 
         if ($process.WaitForExit($TimeoutSeconds * 1000)) {
+            $process.WaitForExit()
             $result.ExitCode = $process.ExitCode
         }
         else {
@@ -237,12 +259,14 @@ function Invoke-Program {
             try { $process.WaitForExit(5000) | Out-Null } catch { }
         }
 
-        if (Test-Path -LiteralPath $outFile) { $result.StdOut = [string](Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue) }
-        if (Test-Path -LiteralPath $errFile) { $result.StdErr = [string](Get-Content -LiteralPath $errFile -Raw -ErrorAction SilentlyContinue) }
+        if ($outTask -and $outTask.Wait(10000)) { $result.StdOut = [string]$outTask.Result }
+        if ($errTask -and $errTask.Wait(10000)) { $result.StdErr = [string]$errTask.Result }
+    }
+    catch {
+        $result.StdErr = ([string]$_.Exception.Message + ' ' + $result.StdErr).Trim()
     }
     finally {
         Restore-Environment -Previous $previous
-        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
     }
 
     return $result

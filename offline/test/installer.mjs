@@ -366,6 +366,32 @@ await step('the built installer is run on Windows before it can ship', () => {
   assert.match(publish, /name: installer-dist/, 'the bytes that are verified must be the bytes that are published');
 });
 
+await step("the installer reads a program's exit code reliably", () => {
+  // Windows PowerShell 5.1 does not fill in ExitCode on the process object that
+  // Start-Process -PassThru returns: it comes back empty, every time, for a
+  // program that has clearly exited. The installer read that as a failure and
+  // refused a program that had just answered with its own status JSON - on a
+  // Windows runner, on a machine where nothing was wrong - and the empty
+  // "(exit )" in a shop's install.log came out of the same hole. Everything
+  // that runs the till and needs the code uses the .NET process object, which
+  // reports the code it was given.
+  for (const file of ['install.ps1', 'verify.ps1']) {
+    const text = codeOnly(read(path.join(payloadDir, file)));
+    assert.match(text, /New-Object System\.Diagnostics\.Process/, `${file} must take the exit code from a .NET process object`);
+    assert.ok(!/Start-Process/.test(text), `${file} must not run the till through Start-Process`);
+  }
+
+  // And the probe does not decide on the number alone: what proves the program
+  // runs is the program answering. A blocked, quarantined or mis-built one
+  // prints nothing, so it still fails there.
+  const installer = codeOnly(read(path.join(payloadDir, 'install.ps1')));
+  assert.match(installer, /\$exitCodeRead = \(\$null -ne \$probe\.ExitCode\)/, 'an unreadable exit code must be told apart from a failing one');
+  assert.match(installer, /\$probe\.StdOut -match '"device_id"'/, 'a program that answers with its own status has to count as running');
+
+  const verifier = codeOnly(read(path.join(offlineDir, 'installer', 'verify-windows.ps1')));
+  assert.match(verifier, /New-Object System\.Diagnostics\.Process/, 'the Windows verifier needs a readable exit code too');
+});
+
 await step('the installer says why the program did not run', () => {
   // In the field the install stopped with "did not run on this PC (exit )." -
   // Windows reported no exit code for a program that aborted, and the message

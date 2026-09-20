@@ -167,6 +167,40 @@ spells the usual offenders out (`—` → `-`, `→` → `->`, `…` → `...`, 
 → ASCII quotes, box drawing → `-`) and leaves anything it does not recognise
 alone rather than guessing at a language.
 
+## A child's exit code is not always readable — and what happens when it is read as failure
+
+The third packaging fault, found by the acceptance job above on its first run:
+
+```
+the packaged program runs: it exited without reporting a code;
+output: { "device_id": "SC-POS-57BBA2", "state": "offline", ... }
+```
+
+The program had **answered correctly**. The installer stopped on the next line
+anyway, with `SoftCora-POS.exe did not run on this PC (exit unknown)` — and on a
+shop's PC the same hole printed `(exit )`, an empty pair of brackets, which is
+what the first field report from the till showed.
+
+`Start-Process -PassThru` returns a process object that, in Windows PowerShell
+5.1, does not report `ExitCode` — it comes back empty even after
+`WaitForExit($ms)` has returned true, and no amount of re-reading fills it in.
+`install.ps1` compared it with zero (`$null -ne 0` is true), concluded that the
+program had failed, and refused to install a program that worked.
+
+What the code does now, in `install.ps1`, `verify.ps1` and
+`installer/verify-windows.ps1`:
+
+| Rule | Why |
+| --- | --- |
+| Run the program through `System.Diagnostics.Process`, never `Start-Process -PassThru` | The .NET object reports the exit code it was given |
+| Read stdout and stderr asynchronously while the program runs, then `WaitForExit($ms)` followed by `WaitForExit()` | Reading a redirected pipe only after exit can deadlock; the parameterless wait lets the readers finish |
+| Treat success as *the program answering* (`--cli status` JSON), and a blank code as unknown rather than failed | A program that is blocked, quarantined or built against the wrong runtime prints nothing at all — it still fails the check |
+| Only a code that was read *and* is not zero is a problem (`verify.ps1`) | The health check used to report a healthy install as a problem for the same reason |
+
+`offline/test/installer.mjs` keeps all four (15/15), and the check in
+`windows-installer` — which is what found this — is the only one that can: it is
+the only place the real `.exe` is executed.
+
 ## The blob and the runtime must be the same Node version — and what happens when they are not
 
 The second release of 1.0.0 also installed nowhere, and again the machine that

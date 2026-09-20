@@ -130,18 +130,41 @@ catch {
 
 # -- sync state, read from the till's own database ----------------------------
 if ($report.installed -and (Test-Path -LiteralPath $Db)) {
-    $outFile = Join-Path $env:TEMP ('softcora-out-' + [guid]::NewGuid().ToString('n') + '.txt')
-    $errFile = Join-Path $env:TEMP ('softcora-err-' + [guid]::NewGuid().ToString('n') + '.txt')
     $previousData = [Environment]::GetEnvironmentVariable('SOFTCORA_DATA')
+
+    # System.Diagnostics.Process, never Start-Process -PassThru: in Windows
+    # PowerShell 5.1 the process object it returns reports no ExitCode, and a
+    # health check that reads that as "the till failed" turns a healthy install
+    # into a problem report. The .NET object reports the code it was given.
+    $text = ''
+    $errors = ''
 
     try {
         [Environment]::SetEnvironmentVariable('SOFTCORA_DATA', $Data)
-        $process = Start-Process -FilePath $Exe -ArgumentList @('--cli', 'status') `
-            -WorkingDirectory $AppDir -NoNewWindow -PassThru `
-            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+
+        $info = New-Object System.Diagnostics.ProcessStartInfo
+        $info.FileName = $Exe
+        $info.Arguments = '"--cli" "status"'
+        $info.WorkingDirectory = $AppDir
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $info.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $info
+        [void]$process.Start()
+
+        $outTask = $process.StandardOutput.ReadToEndAsync()
+        $errTask = $process.StandardError.ReadToEndAsync()
 
         if ($process.WaitForExit(60000)) {
-            $text = [string](Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue)
+            $process.WaitForExit()
+            if ($outTask.Wait(5000)) { $text = [string]$outTask.Result }
+            if ($errTask.Wait(5000)) { $errors = [string]$errTask.Result }
+
             try {
                 $status = $text | ConvertFrom-Json
                 $report.sync = [ordered]@{
@@ -160,13 +183,16 @@ if ($report.installed -and (Test-Path -LiteralPath $Db)) {
             catch {
                 $report.problems += ('the till printed no readable status: ' + $text.Trim())
             }
-            if ($process.ExitCode -ne 0) {
-                $errors = [string](Get-Content -LiteralPath $errFile -Raw -ErrorAction SilentlyContinue)
+
+            # Only a code that was actually read and is not zero is a problem:
+            # an unreadable code is not evidence that anything went wrong.
+            if ($null -ne $process.ExitCode -and $process.ExitCode -ne 0) {
                 $report.problems += ('the till exited with {0}: {1}' -f $process.ExitCode, $errors.Trim())
             }
         }
         else {
             try { $process.Kill() } catch { }
+            try { $process.WaitForExit(5000) | Out-Null } catch { }
             $report.problems += 'the till did not report its status within 60 seconds'
         }
     }
@@ -175,7 +201,6 @@ if ($report.installed -and (Test-Path -LiteralPath $Db)) {
     }
     finally {
         [Environment]::SetEnvironmentVariable('SOFTCORA_DATA', $previousData)
-        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
     }
 }
 

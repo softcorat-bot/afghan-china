@@ -116,7 +116,7 @@ channelled log files that provably contain no secrets; and receipt printing
 a sale).
 
 ```
-npm test                 # 18/18 engine checks, then 14/14 installer checks
+npm test                 # 18/18 engine checks, then 15/15 installer checks
 npm run check:installer  # the Windows payload, on its own
 ```
 
