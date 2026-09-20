@@ -399,12 +399,15 @@ $('findReceipt').addEventListener('click', async () => {
     <h3>${sale.device_invoice_no} <small>${sale.sync_state}</small></h3>
     <p>${new Date(sale.sold_at).toLocaleString()} · total ${money(sale.total)} · refunded ${money(sale.refunded_amount)}</p>
     <table>${sale.items.map((item) => `<tr><td>${escapeHtml(item.name)}</td><td>${item.qty}</td><td>${money(item.line_total)}</td></tr>`).join('')}</table>
+    <button id="reprintReceipt" class="btn">Print receipt</button>
     <h4>Return lines</h4>
     <div id="returnLines">
       ${sale.items.map((item) => `<label class="check"><input type="checkbox" data-item="${item.id}" data-remaining="${item.qty - item.refunded_qty}" /> ${escapeHtml(item.name)} (max ${item.qty - item.refunded_qty})</label>`).join('')}
     </div>
     <button id="doRefund" class="btn primary">Refund selected</button>
     <p id="refundMessage" class="message"></p>`;
+
+  $('reprintReceipt').addEventListener('click', () => printReceipt(sale.uuid));
 
   $('doRefund').addEventListener('click', async () => {
     const lines = [...$('returnLines').querySelectorAll('input:checked')].map((input) => ({
@@ -706,16 +709,54 @@ async function refreshSettings() {
   $('settingsPanel').innerHTML = `
     <label class="check"><input id="autoSync" type="checkbox" ${s.auto_sync ? 'checked' : ''} /> Automatic sync every</label>
     <div class="row"><input id="autoMinutes" type="number" min="1" value="${s.auto_sync_minutes}" /> minutes</div>
-    <div class="row"><input id="serverUrl" value="${escapeHtml(s.server_url ?? '')}" /></div>
-    <button id="saveSettings" class="btn">Save</button>`;
+    <div class="row"><label>Server address <input id="serverUrl" value="${escapeHtml(s.server_url ?? '')}" /></label></div>
+    <h4>Receipt printer</h4>
+    <p class="muted small">Dialog mode opens the browser print window (works with any printer, one click).
+    Raw mode prints silently to a shared Windows thermal printer (share it in
+    <em>Printer properties → Share</em> and put the share name here).</p>
+    <div class="row"><label>Printer mode
+      <select id="printerMode">
+        <option value="dialog" ${s.printer_mode !== 'raw' ? 'selected' : ''}>Browser print dialog</option>
+        <option value="raw" ${s.printer_mode === 'raw' ? 'selected' : ''}>Silent thermal printer (Windows)</option>
+      </select></label>
+    </div>
+    <div class="row"><label>Printer share name <input id="printerShare" placeholder="e.g. POS80" value="${escapeHtml(s.printer_share ?? '')}" /></label></div>
+    <div class="row"><label>Receipt width (characters) <input id="printerWidth" type="number" min="24" max="64" value="${escapeHtml(String(s.printer_width ?? 42))}" /></label></div>
+    <label class="check"><input id="printerDrawer" type="checkbox" ${s.printer_drawer_kick ? 'checked' : ''} /> Open the cash drawer after each receipt</label>
+    <h4>Receipt text</h4>
+    <div class="row"><label>Header <input id="receiptHeader" value="${escapeHtml(s.receipt_header ?? '')}" /></label></div>
+    <div class="row"><label>Footer <input id="receiptFooter" value="${escapeHtml(s.receipt_footer ?? '')}" /></label></div>
+    <div class="row">
+      <button id="saveSettings" class="btn">Save</button>
+      <button id="testPrint" class="btn ghost">Print test receipt</button>
+    </div>
+    <p id="settingsSaved" class="message"></p>`;
 
   $('saveSettings').addEventListener('click', async () => {
-    await api('PUT', '/api/settings', {
+    const saved = await api('PUT', '/api/settings', {
       auto_sync: $('autoSync').checked,
       auto_sync_minutes: Number($('autoMinutes').value),
       server_url: $('serverUrl').value,
+      printer_mode: $('printerMode').value,
+      printer_share: $('printerShare').value.trim(),
+      printer_width: Number($('printerWidth').value) || 42,
+      printer_drawer_kick: $('printerDrawer').checked,
+      receipt_header: $('receiptHeader').value,
+      receipt_footer: $('receiptFooter').value,
     });
+    $('settingsSaved').textContent = saved.ok ? 'Saved.' : (saved.payload.message ?? 'Could not save.');
     refreshSettings();
+  });
+
+  $('testPrint').addEventListener('click', async () => {
+    $('settingsSaved').textContent = 'Printing…';
+    const result = await api('POST', '/api/print/test', {});
+    if (!result.ok) {
+      $('settingsSaved').textContent = result.payload.message ?? 'The printer did not take the test receipt.';
+      return;
+    }
+    if (result.payload.mode === 'dialog') printDialog(result.payload.model, result.payload.text);
+    $('settingsSaved').textContent = result.payload.mode === 'dialog' ? 'Test receipt opened for printing.' : 'Test receipt sent to the printer.';
   });
 }
 
@@ -728,10 +769,52 @@ $('backupNow').addEventListener('click', async () => {
 
 /* ── helpers ────────────────────────────────────────────────────────────── */
 
-function printReceipt(sale) {
-  const lines = sale.items.map((item) => `${item.name} x${item.qty}  ${money(item.line_total)}`).join('\n');
-  const receipt = `SoftCora POS\n${sale.device_invoice_no}\n${new Date(sale.sold_at).toLocaleString()}\n\n${lines}\n\nTOTAL ${money(sale.total)}\nPAID ${money(sale.paid)}`;
-  console.log(receipt);
+/**
+ * Printing never blocks a sale: it happens after the transaction is committed,
+ * and a printer fault is a message on the screen, nothing more.
+ * Two paths, chosen in Settings → Receipt printer:
+ *   raw    — the local service pushes ESC/POS to the shared Windows printer.
+ *   dialog — a formatted 80 mm window opens and the browser prints it.
+ */
+async function printReceipt(saleOrKey) {
+  const key = typeof saleOrKey === 'string' ? saleOrKey : (saleOrKey?.uuid ?? saleOrKey?.device_invoice_no);
+  if (!key) return;
+
+  const { ok, payload } = await api('GET', `/api/print/receipt/${encodeURIComponent(key)}`);
+  if (!ok) {
+    message(payload.message ?? 'That receipt is not on this till.');
+    return;
+  }
+
+  if (payload.printer?.printer_mode === 'raw') {
+    const printed = await api('POST', '/api/print/receipt', { sale_uuid: key });
+    message(printed.ok
+      ? `Receipt ${printed.payload.invoice_no} sent to the printer.`
+      : (printed.payload.message ?? 'The printer did not take the receipt.'));
+    return;
+  }
+
+  printDialog(payload.model, payload.text);
+}
+
+function printDialog(model, text) {
+  const win = window.open('', '_blank', 'width=420,height=640');
+  if (!win) {
+    message('The browser blocked the print window — allow pop-ups for this till.');
+    return;
+  }
+
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(model.invoice_no)}</title>
+<style>
+  @page { size: 80mm auto; margin: 4mm; }
+  body { font-family: 'Courier New', ui-monospace, monospace; font-size: 11px; width: 72mm; margin: 0 auto; color: #000; }
+  pre { white-space: pre-wrap; word-wrap: break-word; font: inherit; margin: 0; }
+  @media screen { body { border: 1px dashed #ccc; padding: 8px; margin-top: 16px; } }
+</style></head>
+<body><pre>${escapeHtml(text)}</pre>
+<script>window.onload = function () { window.print(); window.onafterprint = function () { window.close(); }; setTimeout(function () { window.close(); }, 60000); }<\/script>
+</body></html>`);
+  win.document.close();
 }
 
 function truncate(value) {

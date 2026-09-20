@@ -1009,3 +1009,26 @@ Verified: every PHP file in the project parses clean (`php-parser` 8.3 grammar,
 `config/sync.php` and `SyncPusher` resolves to a real file with the referenced
 method present. Device-facing endpoints are registered under both `/api/v1/sync/*`
 and the legacy `/api/sync/*` paths.
+
+## 2026-09-20 — Offline-first production gap closure (audit → implement → verify)
+
+Starting point: the offline till + Laravel sync engine already existed (outbox,
+idempotency, conflicts, device fleet APIs). `docs/OFFLINE_ARCHITECTURE_AUDIT.md`
+recorded the full inspection and the four real gaps. All closed in one branch:
+
+| Item | What changed | Verified by |
+|---|---|---|
+| Web fleet admin (was API-only, unusable by staff) | New Quasar pages `PosDevicesPage.vue` (register + one-time activation-code dialog, lifecycle actions, detail drawer with batches/conflicts), `SyncMonitorPage.vue` (totals, attention rows, batch feed, prune), `SyncConflictsPage.vue` (filters, side-by-side diff, resolve honoring financial rules); routes + System menu + 66 i18n keys × en/fa/pa/zh | `npx quasar build` clean, pages present in `dist/spa/assets/`, oxlint 0/0 |
+| Till observability (was stdout-only) | `offline/src/log.mjs`: application/sync/error/security logs, 2 MB × 3 rollover, secret redaction; wired into server/engine/auth/backup; tail API `GET /api/logs/{channel}` | e2e step 16: known password provably absent from logs; refused + accepted sign-ins recorded |
+| Offline printing (was `console.log` — receipts never actually printed) | `offline/src/print.mjs`: receipt model + 80 mm text + ESC/POS builder + silent Windows shared-printer delivery (`printer_share`) + cash-drawer kick + browser-dialog fallback + test receipt + reprint from lookup; settings in `/api/settings` | e2e step 17: init/cut bytes, ASCII-safe Dari, 409/501 honesty, sale untouched by print failure |
+| Tests | e2e 16 → 18 checks | **18/18 passing** |
+| Docs | root `docs/`: OFFLINE_ARCHITECTURE, OFFLINE_DATABASE, OFFLINE_SECURITY, OFFLINE_TESTING, INSTALLATION, TROUBLESHOOTING, RELEASE (+ pre-existing SYNC_ENGINE) | committed |
+| Deliverable | `installer/build-windows.sh` rerun end-to-end | `offline/dist/SoftCora-POS-Setup.exe` (PE32+ x64, 23.1 MiB) + portable zip + sha256 + release notes; packaged blob self-test passed |
+
+Bugs found & fixed during verification: log dir resolved at import time (now
+per-write); ESC/POS command bytes zeroed by an argument-spread bug.
+
+Deferred by design (needs the Windows shop floor, documented in
+`OFFLINE_TESTING.md` §2): raw thermal print on real hardware, SmartScreen flow
+on a clean PC, power-cut drills, `gh release` at ship time. Backend was already
+complete — zero PHP changes required in this round.

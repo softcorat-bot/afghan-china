@@ -36,3 +36,6 @@ offline/data/
 offline/build/
 offline/node_modules/
 offline/dist/
+
+# Offline POS till: local log files (runtime artifact)
+offline/logs/

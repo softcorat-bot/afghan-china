@@ -20,6 +20,8 @@ import { counts, recentLog, retryFailed } from './queue.mjs';
 import { createBackup } from './backup.mjs';
 import { nowIso, suggestDeviceId } from './ids.mjs';
 import { isMainModule, moduleDir } from './runtime-paths.mjs';
+import { logs, readLogTail, logsDir } from './log.mjs';
+import { PRINTER_MODES, buildReceiptModel, printModelRaw, printRaw, printerSettings, renderText, testReceiptModel } from './print.mjs';
 
 const PUBLIC_DIR = path.join(moduleDir, '..', 'public');
 
@@ -77,6 +79,9 @@ export function startServer({ dbFile = null, serverUrl = null, port = process.en
 
       serveStatic(request, response, url);
     } catch (error) {
+      if ((error.status ?? 500) >= 500) {
+        logs.error('request failed', { method: request.method, path: url.pathname, error: error.message });
+      }
       send(response, error.status ?? 500, { message: error.message });
     }
   });
@@ -84,6 +89,16 @@ export function startServer({ dbFile = null, serverUrl = null, port = process.en
   server.listen(port, host, () => {
     console.log(`SoftCora offline POS listening on http://${host}:${port}`);
     console.log(`Data: ${db.prepare('pragma database_list').get()?.file}`);
+    logs.app('till started', {
+      port, host,
+      device_id: getMeta(db, 'device_id'),
+      data: db.prepare('pragma database_list').get()?.file,
+      logs: logsDir(),
+    });
+  });
+
+  server.on('error', (error) => {
+    logs.error('till server error', { error: error.message });
   });
 
   // Automatic sync is a convenience, never a requirement: it runs quietly in the
@@ -149,6 +164,8 @@ async function handleApi({ request, response, url, till }) {
         branch_id: result.branch_id,
       });
 
+      logs.security('device registered', { device_id: deviceId, server: serverUrl, branch_id: result.branch_id, actor: user?.email ?? 'first-run' });
+
       return send(response, 201, { device_id: deviceId, status: result.device?.status, branch_id: result.branch_id });
     }
 
@@ -164,20 +181,26 @@ async function handleApi({ request, response, url, till }) {
           setMeta(db, 'last_online_login_at', nowIso());
 
           const local = localLogin(db, { identifier: remote.user.email ?? body.identifier, secret: body.secret, allowPin: true });
+          logs.security('sign-in (server-verified)', { user: body.identifier, device_id: getMeta(db, 'device_id') });
           return send(response, 200, { ...local, cached_user_id: userId, source: 'server' });
         } catch (error) {
           // Fall through to the local cache — a broken server must not lock the
           // cashier out of their own till.
+          logs.appWarn('online sign-in fell back to the local cache', { user: body.identifier, reason: error.message });
         }
       }
 
       const result = localLogin(db, { identifier: body.identifier, secret: body.secret, allowPin: body.use_pin !== false });
+
+      if (result.ok) logs.security('sign-in (offline)', { user: body.identifier });
+      else logs.securityWarn('sign-in refused', { user: body.identifier, reason: result.reason ?? 'unknown' });
 
       return send(response, result.ok ? 200 : 401, result);
     }
 
     case route === 'POST /api/auth/logout':
       logout(db, sessionToken);
+      logs.security('sign-out', { user: user?.email ?? 'unknown' });
       return send(response, 200, { ok: true });
 
     /* ── first run ───────────────────────────────────────────────────── */
@@ -245,6 +268,8 @@ async function handleApi({ request, response, url, till }) {
         email: body.identifier,
         role: body.role ?? 'Counter',
       }, body.secret, { type: body.use_pin ? 'pin' : 'password' });
+
+      logs.security('offline sign-in provisioned', { user: body.identifier, role: body.role ?? 'Counter', actor: user?.email ?? 'first-run' });
 
       return send(response, 201, { ok: true, user_id: id, message: `${body.identifier} can now sign in on this till with no internet.` });
     }
@@ -380,13 +405,22 @@ async function handleApi({ request, response, url, till }) {
         receipt_footer: getMeta(db, 'receipt_footer'),
         currency: getMeta(db, 'currency', 'AFN'),
         return_window_days: Number(getMeta(db, 'return_window_days', '7')),
+        ...printerSettings(db),
       });
 
     case route === 'PUT /api/settings': {
       requireUser(user);
-      for (const key of ['auto_sync', 'auto_sync_minutes', 'server_url', 'receipt_header', 'receipt_footer', 'currency', 'return_window_days']) {
+
+      if (body.printer_mode !== undefined && !PRINTER_MODES.includes(body.printer_mode)) {
+        return send(response, 422, { message: `printer_mode must be one of: ${PRINTER_MODES.join(', ')}` });
+      }
+
+      for (const key of ['auto_sync', 'auto_sync_minutes', 'server_url', 'receipt_header', 'receipt_footer', 'currency', 'return_window_days',
+        'printer_mode', 'printer_share', 'printer_width', 'printer_drawer_kick']) {
         if (body[key] !== undefined) setMeta(db, key, typeof body[key] === 'boolean' ? (body[key] ? '1' : '0') : String(body[key]));
       }
+
+      logs.app('settings updated', { actor: user.email ?? user.name ?? 'unknown', keys: Object.keys(body).join(',') });
 
       return send(response, 200, { ok: true });
     }
@@ -394,7 +428,52 @@ async function handleApi({ request, response, url, till }) {
     case route === 'POST /api/backup': {
       requireUser(user);
 
-      return send(response, 201, createBackup(db, { label: body.label ?? 'manual' }));
+      const backup = createBackup(db, { label: body.label ?? 'manual' });
+      logs.app('backup created', { file: backup.file, actor: user.email ?? 'unknown' });
+
+      return send(response, 201, backup);
+    }
+
+    /* ── receipt printing ────────────────────────────────────────────── */
+    /* The sale is already committed before any of these run: printing can   */
+    /* fail loudly without ever endangering the transaction.                */
+    case url.pathname.startsWith('/api/print/receipt/') && request.method === 'GET': {
+      const key = decodeURIComponent(url.pathname.split('/').pop());
+      const model = buildReceiptModel(db, key);
+
+      return send(response, 200, { model, text: renderText(model), printer: printerSettings(db) });
+    }
+
+    case route === 'POST /api/print/receipt': {
+      requireUser(user);
+      const key = body.sale_uuid ?? body.device_invoice_no ?? body.invoice ?? null;
+      if (!key) return send(response, 422, { message: 'Which receipt? Pass sale_uuid or device_invoice_no.' });
+
+      return send(response, 200, await printRaw(db, key));
+    }
+
+    case route === 'POST /api/print/test': {
+      requireUser(user);
+
+      const model = testReceiptModel(db);
+
+      if (printerSettings(db).printer_mode !== 'raw') {
+        return send(response, 200, { mode: 'dialog', model, text: renderText(model) });
+      }
+
+      return send(response, 200, { mode: 'raw', ...(await printModelRaw(db, model)) });
+    }
+
+    /* ── log tails for troubleshooting (signed-in staff only) ─────────── */
+    case url.pathname.startsWith('/api/logs/') && request.method === 'GET': {
+      requireUser(user);
+      const channel = decodeURIComponent(url.pathname.split('/').pop());
+
+      if (!['application', 'sync', 'error', 'security'].includes(channel)) {
+        return send(response, 404, { message: 'application, sync, error or security.' });
+      }
+
+      return send(response, 200, { channel, directory: logsDir(), lines: readLogTail(channel, 200) });
     }
 
     default:
