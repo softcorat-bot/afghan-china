@@ -201,4 +201,17 @@ jobs:
             --notes-file "$RUNNER_TEMP/latest-notes.md" \
             --latest
 
+          # Prove the permanent link serves the bytes this run uploaded: take
+          # the download path a client takes and hold the result against the
+          # checksums that were just published.
+          VERIFY="$RUNNER_TEMP/verify-download"
+          mkdir -p "$VERIFY"
+          gh release download "$ROLLING" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'Afghan-China-Setup.exe' --pattern 'sha256.txt' \
+            --dir "$VERIFY"
+          cd "$VERIFY"
+          grep 'Afghan-China-Setup.exe' sha256.txt | sha256sum -c -
+          [ "$(head -c 2 Afghan-China-Setup.exe)" = "MZ" ]
+          echo "✓ verified end to end — $URL serves this build"
+
           echo "✓ $ROLLING refreshed — $URL now serves this build"
