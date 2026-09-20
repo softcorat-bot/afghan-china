@@ -216,7 +216,11 @@ function Invoke-Program {
         [Parameter(Mandatory = $true)][string[]]$Arguments,
         [string]$DataPath = '',
         [hashtable]$Environment = $null,
-        [int]$TimeoutSeconds = 120
+        [int]$TimeoutSeconds = 120,
+        # Set when the caller has built the command line itself - cmd.exe is
+        # parsed by cmd, and quoting its arguments a second time turns
+        # "C:\path\install.cmd" into a name cmd cannot find.
+        [switch]$RawArguments
     )
 
     $result = [pscustomobject]@{ ExitCode = $null; StdOut = ''; StdErr = ''; TimedOut = $false }
@@ -235,6 +239,7 @@ function Invoke-Program {
         $info = New-Object System.Diagnostics.ProcessStartInfo
         $info.FileName = $Path
         $info.Arguments = (($Arguments | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }) -join ' ')
+        if ($RawArguments) { $info.Arguments = ($Arguments -join ' ') }
         $info.UseShellExecute = $false
         $info.CreateNoWindow = $true
         $info.RedirectStandardOutput = $true
@@ -528,9 +533,13 @@ if ($Install -and $workRoot) {
     # install.cmd is what the SFX stub runs. -NoLaunch keeps this script in
     # control of the machine instead of leaving a till running on it, and
     # -SkipAutostart keeps the installer out of this user's Startup folder.
+    # /s /c ""<path>" <args>" is the one form cmd.exe parses correctly whether
+    # or not the profile folder has a space in its name; without /s, cmd strips
+    # the first and last quote and a spaced path runs as "C:\Users\First".
     $comspec = $env:ComSpec
-    $installRun = Invoke-Program -Path $comspec `
-        -Arguments @('/c', ('"' + (Join-Path $payloadRoot 'install.cmd') + '"'), '-NoLaunch', '-SkipAutostart') `
+    $installLine = '/s /c ""{0}" {1}"' -f (Join-Path $payloadRoot 'install.cmd'), '-NoLaunch -SkipAutostart'
+    $installRun = Invoke-Program -Path $comspec -RawArguments `
+        -Arguments @($installLine) `
         -TimeoutSeconds 600
 
     $installOk = ($installRun.ExitCode -eq 0)
@@ -577,7 +586,14 @@ if ($Install -and $workRoot) {
     $report = Get-ParsedJson $health.StdOut
     $healthOk = ($health.ExitCode -eq 0 -and $null -ne $report -and $report.installed -eq $true)
     $healthDetail = 'exit ' + $health.ExitCode + ': ' + (Summarise-Output ($health.StdErr + ' ' + $health.StdOut))
-    if ($null -ne $report) { $healthDetail = 'installed=' + $report.installed + ', version ' + $report.version + ', problems ' + @($report.problems).Count }
+    if ($null -ne $report -and $null -ne $report.PSObject.Properties['installed']) {
+        $healthDetail = 'installed=' + $report.installed + ', version ' + $report.version + ', problems ' + @($report.problems).Count
+    }
+    elseif ($null -ne $report) {
+        # A parseable object that is not a health report is still worth naming:
+        # printing empty fields is how one red run hid what had happened.
+        $healthDetail = 'the health check did not print a report: ' + (Summarise-Output ($health.StdErr + ' ' + $health.StdOut))
+    }
     Add-Check -Name 'verify.ps1 reports the installation as healthy' -Ok $healthOk -Detail $healthDetail
 
     if ($null -ne $report -and $report.version) {

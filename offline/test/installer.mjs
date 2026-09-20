@@ -390,6 +390,15 @@ await step("the installer reads a program's exit code reliably", () => {
 
   const verifier = codeOnly(read(path.join(offlineDir, 'installer', 'verify-windows.ps1')));
   assert.match(verifier, /New-Object System\.Diagnostics\.Process/, 'the Windows verifier needs a readable exit code too');
+
+  // cmd.exe parses its own command line: quoting install.cmd's path a second
+  // time (the verifier quotes every argument it is given) makes cmd look for a
+  // file whose name has quote characters in it, and the install then fails with
+  // "'\"C:\...\install.cmd\""' is not recognized as an internal or external
+  // command" - which is exactly what one red run reported, and it said nothing
+  // about the installer. The line cmd gets has to be built once, for cmd.
+  assert.match(verifier, /-RawArguments/, 'the verifier must not let install.cmd go through the generic argument quoting');
+  assert.match(verifier, /\/s \/c ""\{0\}" \{1\}"/, "cmd's own /s /c \"\"<path>\" <args>\" form is the one it parses correctly");
 });
 
 await step('the installer says why the program did not run', () => {

@@ -201,6 +201,15 @@ What the code does now, in `install.ps1`, `verify.ps1` and
 `windows-installer` — which is what found this — is the only one that can: it is
 the only place the real `.exe` is executed.
 
+One more trap in the same place, also found by that job rather than by reading
+the code: `install.cmd` must be started as `cmd.exe /s /c ""<path>" <args>"`.
+cmd.exe parses its own command line, so putting a quoted path through the
+verifier's generic per-argument quoting produced
+`'"\"C:\...\install.cmd\""' is not recognized as an internal or external command`
+— a failure that says nothing at all about the installer. Without `/s`, cmd
+strips the first and last quote of the line, which breaks a profile folder with a
+space in it (`C:\Users\First Last\...`).
+
 ## The blob and the runtime must be the same Node version — and what happens when they are not
 
 The second release of 1.0.0 also installed nowhere, and again the machine that
