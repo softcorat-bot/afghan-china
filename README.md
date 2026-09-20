@@ -110,3 +110,4 @@ Sync Conflicts** in this web app. Start here:
 - `MASTER_PROMPT.md` — the owner's original rulebook
 
 Development branch: `claude/afghan-china-v2-setup-u3v99o`.
+"# afghan-china" 
