@@ -34,9 +34,20 @@ rules `SYNC_ENGINE.md` documents for Laravel, not a mock of the data):
 
 **Result on the reference run (2026-09-20, this branch): 18/18 ✓**
 
-Additionally, the installer build self-tests the *actual packaged blob* on the
-build host: boots it, serves the embedded screen, creates the database, runs the
-CLI (`installer/build-windows.sh` step 4).
+Additionally, the installer build self-tests the *actual packaged blob* — with a
+**fetched runtime of the version the till ships**, never the build host's own
+Node, which is caught at the top of `installer/build-windows.sh` step 1. Under
+that runtime the packaged form has to boot, serve the embedded screen, create the
+database and run the CLI (step 5).
+
+Nothing here can prove that a *Windows* `.exe` starts, and an installer once
+shipped that aborted on every Windows PC for exactly that reason: the blob was
+written by the build host's Node 22 and read by the shipped Node 26, and every
+check in this section passed. So the built installer is now unpacked, run,
+installed and health-checked on `windows-latest` as well —
+`installer/verify-windows.ps1`, run by the `windows-installer` job in
+`.github/workflows/offline-till.yml`, and by `publish-release-assets.yml` before
+it uploads anything (`docs/RELEASE.md` §3 step 3).
 
 The web frontend production build (`npx quasar build` in `frontend/`) compiles
 with the new fleet pages (`PosDevicesPage`, `SyncMonitorPage`, `SyncConflictsPage`

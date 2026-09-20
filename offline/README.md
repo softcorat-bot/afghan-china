@@ -116,7 +116,7 @@ channelled log files that provably contain no secrets; and receipt printing
 a sale).
 
 ```
-npm test                 # 18/18 engine checks, then 11/11 installer checks
+npm test                 # 18/18 engine checks, then 15/15 installer checks
 npm run check:installer  # the Windows payload, on its own
 ```
 
@@ -126,8 +126,11 @@ for (a typographic dash in a `.ps1`, which Windows PowerShell 5.1 misreads into
 a string delimiter); what the build ships is CRLF, ASCII, marked `.ps1` and
 unmarked `.cmd`; the promises `install.ps1` makes about the data folder, the
 port and its exit codes are still in the script; the launchers set only
-environment variables something reads; and `--cli verify` prints the JSON the
-installer parses.
+environment variables something reads; `--cli verify` prints the JSON the
+installer parses; the SEA blob is written and self-tested by the pinned runtime
+version rather than the build host's Node; the built installer is run on Windows
+by CI before it can be published; and a program that aborts at startup is
+reported as a broken build rather than as `(exit )`.
 
 ## Logs
 

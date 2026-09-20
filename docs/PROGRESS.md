@@ -1032,3 +1032,88 @@ Deferred by design (needs the Windows shop floor, documented in
 `OFFLINE_TESTING.md` §2): raw thermal print on real hardware, SmartScreen flow
 on a clean PC, power-cut drills, `gh release` at ship time. Backend was already
 complete — zero PHP changes required in this round.
+
+## 2026-09-20 — Installer build 2: the SEA blob was written by the wrong Node version
+
+Reported from the field: a shop PC ran `Afghan-China-Setup.exe` (the rolling
+`latest` build published earlier that day) and setup stopped with
+
+```
+SoftCora-POS.exe did not run on this PC (exit ).
+#  SeaResource ... SeaDeserializer::Read(void) at src\node_sea.cc:172
+#  Assertion failed: (format_value) <= (static_cast<uint8_t>(ModuleFormat::kModule))
+```
+
+Root cause: the publish workflow built on `ubuntu-latest` with `setup-node@22`,
+so `node --experimental-sea-config` wrote a **Node 22** blob while the till ships
+`node-win-x64@26.9.0`. A SEA blob is an internal, version-specific
+serialization: Node 26's deserializer read the Node 22 format field and aborted
+before the till did anything. Reproduced here exactly (Node 22 blob injected into
+a Node 26 binary → the same assertion, exit 134; a Node 26 blob in the same
+binary runs). Nothing in the pipeline could see it: the build's self-test
+injected the blob into *the same local Node that wrote it*, and every other check
+read installer scripts, not the program.
+
+| Item | What changed | Verified by |
+|---|---|---|
+| Blob/runtime pairing | `installer/build-windows.sh` pins one `NODE_VERSION` (26.9.0, overridable with `SOFTCORA_NODE_VERSION`), fetches `node-win-x64` **and** a host runtime of that version, prepares the blob with the fetched host runtime, self-tests the packaged form under it, and stops if either half disagrees. Cached runtimes carry the version in their name; the Windows binary's version is read out of its own version resource, since it cannot be run here | `bash installer/build-windows.sh` built and self-tested end to end here (node 26.9.0 on both halves); the new `test/installer.mjs` guard fails when the old form is put back |
+| The program itself, on Windows | new `installer/verify-windows.ps1`: unpacks the setup, runs `--cli status`/`--cli verify`, starts the till and fetches `/`, `/app.js`, `/styles.css` and `/api/device`, runs `install.cmd -NoLaunch -SkipAutostart`, then checks `install.log`, the installed bytes, the untouched data folder and `verify.ps1` | new `windows-installer` job in `offline-till.yml` (artifact built by the `package` job); `publish-release-assets.yml` is now build → verify-windows → publish, so nothing is uploaded before that |
+| Shop diagnostics | `install.ps1` logs the payload's `RUNTIME.txt` line, writes the program's own output into `install.log` line by line, names a missing exit code (`unknown`) instead of printing `(exit )`, and calls a runtime-plane abort what it is - a build to replace, not a PC to retry | new `test/installer.mjs` guard |
+| Docs | `offline/docs/WINDOWS-INSTALLER.md` → *The blob and the runtime must be the same Node version*; `docs/RELEASE.md` §2, §3, §3a, §4; `docs/TROUBLESHOOTING.md` row for the assertion; `docs/OFFLINE_TESTING.md`; the 1.0.0 release notes | this entry |
+
+Tests: `npm test` → 18/18 e2e + **14/14** installer checks; the e2e suite was
+also re-run under node 26.9.0 (the runtime the till ships) → 18/18. Re-cut as
+1.0.0 build 2: version unchanged, notes rewritten, assets replaced, checksums
+different.
+
+## 2026-09-20 — Installer build 3: a working program's exit code could not be read
+
+Build 2's blob/runtime pairing was right, and the new acceptance job proved it
+within minutes of its first run — the packaged program started, created its
+database and answered `--cli status` with its own JSON. The install still
+stopped, on the runner and would have stopped on the shop's PC, with
+
+```
+install.log: [ERROR] SoftCora-POS.exe did not run on this PC (exit unknown).
+             { "device_id": "SC-POS-28FE51", "state": "offline", ... }   <- its own healthy status
+```
+
+Root cause: in Windows PowerShell 5.1 the process object `Start-Process -PassThru`
+returns never reports `ExitCode` — it comes back empty even after
+`WaitForExit($ms)` returns true. `install.ps1`'s probe compared that `$null` with
+zero, `$null -ne 0` is true, and the installer concluded the program had failed.
+The empty `(exit )` in the first field report from the shop came out of the same
+hole; `verify.ps1` had it too and reported healthy installs as *problems*
+(exit 2). Neither the Linux suites nor the build self-test could see it: the
+quirk exists only in Windows PowerShell, and only the new `windows-installer` job
+executes the real `.exe`.
+
+| Item | What changed | Verified by |
+|---|---|---|
+| Running the till | `install.ps1`, `verify.ps1` and `installer/verify-windows.ps1` run it through `System.Diagnostics.Process` (`UseShellExecute=$false`, redirected streams read asynchronously, `WaitForExit($ms)` then `WaitForExit()`), which reports the exit code it was given | new `test/installer.mjs` check, proven to fail when `Start-Process` is put back |
+| Deciding whether it ran | the probe treats *the program answering with its own status* as proof it runs; an unreadable code is `unknown` and is logged as a warning, not a failure. A program that prints nothing — blocked, quarantined, or built against the wrong runtime — still fails the check | same check: the probe must contain the JSON test and the readable/unreadable distinction |
+| `verify.ps1` | only a code that was read *and* is not zero counts as a problem, so a healthy install cannot report one | run by the acceptance job's install phase |
+| CI readability | every failed check in `verify-windows.ps1` becomes a workflow annotation, the report becomes the step summary and the `windows-verification` artifact (`-Report`), and an unforeseen error is reported like a failed check — the first red run of that job had nothing but "Process completed with exit code 1" in its annotations and a log that could not be downloaded at all | `test/installer.mjs`; used to diagnose this very fault |
+
+Tests: `npm test` → 18/18 e2e + **15/15** installer checks (each new guard
+proven to fail when its fault is put back). To be re-cut as 1.0.0 build 3 once
+the `windows-installer` job is green: version unchanged, notes rewritten (build 3
+entry), assets replaced, checksums different.
+
+Follow-up, same day: the `windows-installer` job went green on run
+[35537650721](https://github.com/softcorat-bot/afghan-china/actions/runs/35537650721)
+(commit 604b619) — the built installer was unpacked, its program ran, the till
+served `/`, `/app.js`, `/styles.css` and `/api/device`, `install.cmd` installed
+into `%LOCALAPPDATA%`, and `install.log`, the installed bytes, the untouched data
+folder and `verify.ps1` all agreed. Getting there took four red runs, and every
+fault it found was in the *verifier*, not in the installer:
+
+| Red run | What the annotations said | Fixed by |
+|---|---|---|
+| 1 | nothing but "Process completed with exit code 1" — the log could not be downloaded | annotations per failed check, the report as step summary and artifact (`-ReportPath`), and a trap so a thrown error reports like a failed check |
+| 2 | `'"\"…\install.cmd\""' is not recognized as an internal or external command` | `cmd.exe /s /c ""<path>" <args>"`, passed as a raw command line (`-RawArguments`) instead of through the generic quoting |
+| 3 | nothing at all again: an early `exit 1` on the unpack path left before reporting | one exit path (`Complete-Run`); unpacking judged by `install.cmd` being there, retried once, and its folder contents reported when it fails |
+| 4 | `the report could not be written to @{product=SoftCora POS; …}` | `-Report` collided with the health report in `$report` (one variable namespace) — renamed to `-ReportPath`/`$healthReport`, with a test that refuses any assignment to `$report` |
+
+The installer itself was already right by run 2: every check it verifies passed
+from the moment the quoting was fixed.

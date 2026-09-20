@@ -143,6 +143,13 @@ function listPayloadFiles(payloadDir) {
   const sfxConfig = path.join(path.dirname(payloadDir), 'sfx-config.txt');
   if (fs.existsSync(sfxConfig) && !files.includes(sfxConfig)) files.push(sfxConfig);
 
+  // verify-windows.ps1 sits beside the payload: it is read by the same Windows
+  // PowerShell 5.1, on a CI runner or a bench PC, and it breaks the same way a
+  // payload script does. It is not shipped inside the installer, but it is
+  // checked as if it were.
+  const windowsVerifier = path.join(path.dirname(payloadDir), 'verify-windows.ps1');
+  if (fs.existsSync(windowsVerifier) && !files.includes(windowsVerifier)) files.push(windowsVerifier);
+
   return files;
 }
 

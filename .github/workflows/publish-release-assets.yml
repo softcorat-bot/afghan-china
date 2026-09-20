@@ -5,9 +5,22 @@
 # The sandboxed build machines this repository is developed on cannot reach
 # uploads.github.com, so a release can exist while its files do not. This
 # workflow runs on GitHub's own runners, rebuilds the installer from source with
-# installer/build-windows.sh (which self-tests the packaged blob before
-# packing), verifies its own checksums, and attaches the files to the releases —
-# so the Assets section of a release page is what it claims to be.
+# installer/build-windows.sh (which self-tests the packaged blob under the Node
+# version the till ships), and attaches the files to the releases — so the Assets
+# section of a release page is what it claims to be.
+#
+# Nothing is published before the built installer has been run on Windows. A
+# release once went out whose .exe aborted at startup on every PC (a blob written
+# by the build host's Node 22, injected into a Node 26 runtime), and no Linux
+# check could see it: the blob only has to agree with the binary that reads it.
+# So the build, the Windows verification and the upload are three jobs, and the
+# upload waits for the middle one:
+#
+#   build            ubuntu-latest, runs build-windows.sh, checks its checksums,
+#                    uploads the artifacts
+#   verify-windows   windows-latest, unpacks that installer, runs the program,
+#                    starts the till, and installs it (installer/verify-windows.ps1)
+#   publish          ubuntu-latest, attaches the very same bytes to the releases
 #
 # Every run publishes to TWO releases:
 #
@@ -73,8 +86,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-upload:
-    name: Rebuild the Windows deliverables and attach them to the releases
+  build:
+    name: Rebuild the Windows deliverables and check them
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -105,6 +118,79 @@ jobs:
           cmp Afghan-China-Setup.exe SoftCora-POS-Setup.exe
           sha256sum -c sha256.txt
           echo '✓ checksums match the exact artifacts being uploaded'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-dist
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            offline/dist/SoftCora-POS-Setup.exe
+            offline/dist/Afghan-China-Setup.exe
+            offline/dist/SoftCoraPOS-portable-win64.zip
+            offline/dist/sha256.txt
+            offline/dist/RELEASE-NOTES.md
+
+  verify-windows:
+    name: Run the built installer on a real Windows PC
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-dist
+          path: offline/dist
+
+      # The gate this workflow was missing. Everything else here checks the
+      # installer without a Windows machine; this step runs the file the shop
+      # downloads: it unpacks it, runs the program inside it, talks to the till
+      # over HTTP, installs it into %LOCALAPPDATA% and asks verify.ps1 whether
+      # the result is healthy. A failure here stops the run before anything is
+      # published.
+      - name: Verify the installer on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Resolve-Path offline\dist\SoftCora-POS-Setup.exe).Path
+          $sha = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+
+          & powershell -NoProfile -ExecutionPolicy Bypass -File offline\installer\verify-windows.ps1 -Installer $installer -Install
+          $code = $LASTEXITCODE
+          $global:LASTEXITCODE = 0   # the exit code is judged here, not by the shell
+
+          if ($code -ne 0) {
+            throw ("the installer did not verify on Windows (exit " + $code + ", sha256 " + $sha + ") — nothing was published")
+          }
+          Write-Host ('  ✓ the installer runs, serves and installs on Windows (sha256 ' + $sha + ')')
+
+  publish:
+    name: Attach the built bytes to the releases
+    needs: [build, verify-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-dist
+          path: offline/dist
+
+      - name: The artifacts arrived intact
+        working-directory: offline/dist
+        run: |
+          set -euo pipefail
+          [ "$(head -c 2 SoftCora-POS-Setup.exe)" = "MZ" ]
+          cmp Afghan-China-Setup.exe SoftCora-POS-Setup.exe
+          sha256sum -c sha256.txt
+          echo '✓ publishing exactly the bytes that were verified on Windows'
 
       - name: Resolve the versioned release tag
         id: tag

@@ -7,6 +7,9 @@ offline/installer/payload/*.cmd   text eol=crlf
 offline/installer/payload/*.ps1   text eol=crlf
 offline/installer/payload/*.txt   text eol=crlf
 offline/installer/sfx-config.txt  text eol=crlf
+# The Windows verifier is read by the same Windows PowerShell 5.1 that runs the
+# payload scripts, so it is stored and checked out the same way.
+offline/installer/verify-windows.ps1  text eol=crlf
 
 # Build and CI scripts run under bash.
 *.sh                              text eol=lf

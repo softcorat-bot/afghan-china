@@ -1,17 +1,30 @@
 #
 # The offline till and its Windows installer.
 #
-# The installer broke once in a way no build machine here could see: a payload
-# script was UTF-8 without a byte-order mark and contained a typographic dash.
-# Windows PowerShell 5.1 reads such a file with the machine's ANSI code page,
-# where that dash decodes into a character PowerShell accepts as a string
-# delimiter - so the script parsed on every machine in this repository and on
-# none of the shop's. It is checked in three independent ways now:
+# Two failures on real PCs have shaped this workflow, and neither could be seen
+# by the build machine that produced it:
+#
+#   * a payload script was UTF-8 without a byte-order mark and contained a
+#     typographic dash. Windows PowerShell 5.1 reads such a file with the
+#     machine's ANSI code page, where that dash decodes into a character
+#     PowerShell accepts as a string delimiter - so the script parsed on every
+#     machine in this repository and on none of the shop's.
+#
+#   * the installer's program was built from a Node single-executable blob
+#     written by the build host's Node 22 while the runtime it was injected into
+#     was Node 26. A blob is only readable by the exact version that wrote it,
+#     so every check here passed and the .exe aborted on every Windows PC.
+#
+# Both are now tested on the host that runs them, not the host that builds them:
 #
 #   * the project's own checker (ASCII, CRLF, marks, quoting read both ways),
 #   * the real PowerShell parser on a Linux runner, where pwsh is installed,
-#   * and Windows PowerShell 5.1 itself, on a Windows runner, which is the host
-#     that actually runs these files - parsing them and running two of them.
+#   * Windows PowerShell 5.1 itself, on a Windows runner, which is the host that
+#     actually runs these files - parsing them, running two of them, and
+#   * the built installer, unpacked and run end to end on that Windows runner:
+#     the program starts, answers its API, installs into %LOCALAPPDATA% and its
+#     own health check agrees. That job is the one that would have caught the
+#     blob/runtime mismatch in seconds.
 #
 name: Offline till
 
@@ -60,6 +73,46 @@ jobs:
         working-directory: offline
         run: node test/installer.mjs
 
+  package:
+    name: The Windows deliverables, built once for the other jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The build fetches the runtime it ships, pinned by version, and self-tests
+      # the packaged blob under that same version. It fails rather than shipping
+      # if the pinned version is not published for the host it is building on.
+      - name: Build the Windows deliverables
+        run: bash offline/installer/build-windows.sh
+
+      - name: Check what was built, before anything else looks at it
+        working-directory: offline/dist
+        run: |
+          set -euo pipefail
+          test -s SoftCora-POS-Setup.exe
+          test -s SoftCoraPOS-portable-win64.zip
+          test -s sha256.txt
+          [ "$(head -c 2 SoftCora-POS-Setup.exe)" = "MZ" ]
+          cmp Afghan-China-Setup.exe SoftCora-POS-Setup.exe
+          sha256sum -c sha256.txt
+          echo '✓ the artifacts describe themselves correctly'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            offline/dist/SoftCora-POS-Setup.exe
+            offline/dist/Afghan-China-Setup.exe
+            offline/dist/sha256.txt
+            offline/dist/RELEASE-NOTES.md
+
   windows-payload:
     name: The installer scripts, on the Windows PowerShell that runs them
     runs-on: windows-latest
@@ -81,8 +134,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Write-Host ("  Windows PowerShell " + $PSVersionTable.PSVersion)
 
-          $files = Get-ChildItem -Path offline\installer\payload -Filter *.ps1 -Recurse
-          if (-not $files) { throw 'no payload scripts found' }
+          $files = @(Get-ChildItem -Path offline\installer\payload -Filter *.ps1 -Recurse)
+          # The verifier runs on this same host, so it is read the same way.
+          $files += @(Get-Item -Path offline\installer\verify-windows.ps1)
+          if (-not $files) { throw 'no scripts found' }
 
           $failed = 0
           foreach ($file in $files) {
@@ -99,7 +154,7 @@ jobs:
             }
           }
 
-          if ($failed -gt 0) { throw ($failed.ToString() + ' payload script(s) do not parse on Windows PowerShell') }
+          if ($failed -gt 0) { throw ($failed.ToString() + ' script(s) do not parse on Windows PowerShell') }
 
       - name: The payload checker, on Windows
         working-directory: offline
@@ -164,3 +219,68 @@ jobs:
           $reason = Select-String -LiteralPath (Join-Path $root 'logs\install.log') -Pattern 'payload is incomplete' -SimpleMatch
           if (-not $reason) { throw 'the log does not say why the install stopped' }
           Write-Host '  ok  the log says why: ' $reason.Line.Trim()
+
+  windows-installer:
+    name: The built installer, unpacked, run and installed on Windows
+    needs: package
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: offline/dist
+
+      # This is the job the blob/runtime mismatch could not survive: it takes the
+      # installer this run built, unpacks it with 7-Zip exactly as the SFX stub
+      # does, runs the program inside it, starts the till, fetches its screen and
+      # its API, and then runs install.cmd the way a shop does - checking
+      # install.log, the installed bytes, the untouched data folder and
+      # verify.ps1 afterwards. See installer/verify-windows.ps1.
+      - name: Run the built installer on this Windows PC
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Resolve-Path offline\dist\SoftCora-POS-Setup.exe).Path
+          $summary = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          $report = (Join-Path (Get-Location) 'windows-verification.json')
+
+          # -ReportPath writes the result where the next step can find it
+          # whichever way this goes, because the job's log is not always readable
+          # - the annotations the verifier emits are what survives.
+          & powershell -NoProfile -ExecutionPolicy Bypass -File offline\installer\verify-windows.ps1 -Installer $installer -Install -ReportPath $report
+          $code = $LASTEXITCODE
+          $global:LASTEXITCODE = 0   # the exit code is judged here, not by the shell
+
+          if ($code -ne 0) {
+            throw ("the installer did not verify on Windows (exit " + $code + ", sha256 " + $summary + ")")
+          }
+          Write-Host ('  ok  SoftCora-POS-Setup.exe ran, served its screen and installed itself (sha256 ' + $summary + ')')
+
+      - name: Say what the verification found, whichever way it went
+        if: always()
+        shell: powershell
+        run: |
+          $report = 'windows-verification.json'
+          if (-not (Test-Path -LiteralPath $report)) {
+            Write-Host 'the verifier wrote no report - read the job log above'
+            exit 0
+          }
+
+          $parsed = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          Write-Host ("  ok=" + $parsed.ok + ", " + @($parsed.checks).Count + ' checks')
+          foreach ($check in @($parsed.checks)) {
+            $mark = 'ok  '
+            if (-not $check.ok) { $mark = 'FAIL' }
+            Write-Host ('  ' + $mark + ' ' + $check.name + ' - ' + $check.detail)
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-verification
+          if-no-files-found: warn
+          retention-days: 7
+          path: windows-verification.json

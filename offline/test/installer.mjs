@@ -298,6 +298,137 @@ await step('the upgrade gate prints the JSON the installer parses', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+await step('the SEA blob is written by the same Node version the till ships', () => {
+  // The failure this guards against: a blob written by the build host's own
+  // Node, injected into a runtime of another version. Node's deserializer reads
+  // a format field it did not write and aborts the process, so the .exe starts
+  // on no PC at all - and every check that runs on the build host passes,
+  // because the blob agrees with the version that wrote it.
+  const build = read(path.join(offlineDir, 'installer', 'build-windows.sh'));
+
+  const pin = /^NODE_VERSION="\$\{SOFTCORA_NODE_VERSION:-([^}]+)\}"/m.exec(build);
+  assert.ok(pin, 'build-windows.sh must pin the Node version the till ships with, so a Node release cannot change it between builds');
+  assert.match(build, /if version not in meta\['versions'\]/, 'the pinned version must have to exist, or the build stops');
+
+  assert.match(build, /"\$HOST_NODE" --experimental-sea-config/, 'the blob must be prepared by a runtime of the pinned version');
+  assert.ok(!/"\$NODE" --experimental-sea-config/.test(build), "the build host's own Node must never write the blob");
+
+  assert.match(build, /cp "\$HOST_NODE" "\$SELFCHECK"/, 'the packaged form must be self-tested under the pinned runtime');
+  assert.ok(!/cp "\$NODE" "\$SELFCHECK"/.test(build), "the self-test must not run under the build host's Node");
+
+  // Both halves are checked, not assumed: the fetched runtime is asked which
+  // version it is, and the Windows binary - which cannot run here - has its
+  // version read out of the version resource it carries.
+  assert.match(build, /process\.versions\.node/, 'the build must ask the runtime which version it is');
+  assert.match(build, /FileVersion/, 'the Windows runtime must be checked against the pin as well');
+  assert.match(build, /node-v\$NODE_VERSION-win-x64\.exe/, 'a cached runtime must carry the version in its name, so a bump cannot reuse the old one');
+});
+
+await step('the built installer is run on Windows before it can ship', () => {
+  // The other half of the same lesson: a Linux self-test can say a blob is fine
+  // but it cannot say that a Windows .exe starts. So the artifact is unpacked
+  // and run on a real Windows host by installer/verify-windows.ps1, and the
+  // publish workflow waits for that before it uploads anything.
+  const verifier = read(path.join(offlineDir, 'installer', 'verify-windows.ps1'));
+
+  assert.match(verifier, /'--cli', 'status'/, 'the verifier must run the program the installer ships');
+  assert.match(verifier, /api\/device/, 'the verifier must talk to the till over HTTP');
+  assert.match(verifier, /install\.cmd/, 'the verifier must run the installer itself');
+  assert.match(verifier, /install\.log/, 'the verifier must read what the installer logged');
+  assert.match(verifier, /verify\.ps1/, 'the verifier must ask the installed till whether it is healthy');
+
+  const until = read(path.join(offlineDir, '..', '.github', 'workflows', 'offline-till.yml'));
+  assert.match(until, /windows-installer:/, 'the till workflow must have a job that runs the built installer on Windows');
+  assert.match(until, /verify-windows\.ps1 -Installer \$installer -Install/, 'that job must run the verifier against the artifact this run built');
+  assert.match(until, /needs: package/, 'the Windows job must check the artifact the build job produced, not rebuild it');
+  assert.match(until, /ParseFile/, 'the verifier must be parsed by the Windows PowerShell that runs it');
+
+  // A run that goes red has to be readable afterwards. The first run of this
+  // job failed with nothing but "Process completed with exit code 1" in the
+  // run's annotations - the log itself could not be downloaded at all - which
+  // is a failure nobody can act on. So: the verifier reports a thrown error
+  // like a failed check, every failed check becomes a workflow annotation, the
+  // report is written to a file the job keeps, and a native command's stderr is
+  // never merged into the pipeline under $ErrorActionPreference = 'Stop' (in
+  // Windows PowerShell 5.1 that can end the script with no report at all).
+  const verifierCode = codeOnly(verifier);
+  assert.match(verifierCode, /^trap \{/m, 'the verifier must report even when something unforeseen throws');
+  assert.match(verifierCode, /::\{0\} title=\{1\}::\{2\}/, 'a failed check must reach the run as an annotation');
+  assert.match(verifierCode, /Write-Annotation -Title 'verify-windows' -Message \(\$check\.name/, 'every failed check must be annotated, not just the thrown ones');
+  assert.ok(!/2>&1/.test(verifierCode), "a native command's stderr must not be merged into the pipeline: it can end the script with no report");
+
+  assert.match(until, /-Install -ReportPath \$report/, 'the CI job must keep the verification report as a file');
+  // Windows PowerShell has one namespace for variables: while the parameter was
+  // called -Report and the health report of the installed copy lived in
+  // `$report`, assigning the second silently overwrote the first, and the file
+  // the job asked for was never written. The names must not be able to meet.
+  assert.match(verifier, /\[string\]\$ReportPath = ''/, 'the report parameter must not collide with the health report variable');
+  assert.ok(!/\$report\s*=/.test(verifierCode), 'nothing may assign to $report: that is the report path parameter');
+  assert.match(until, /name: windows-verification/, 'the report must be uploaded, failed or not');
+  assert.match(until, /if: always\(\)/, 'the report must be kept even when the verification fails');
+
+  const publish = read(path.join(offlineDir, '..', '.github', 'workflows', 'publish-release-assets.yml'));
+  assert.match(publish, /needs: \[build, verify-windows\]/, 'nothing may be published before the built installer has run on Windows');
+  assert.match(publish, /name: installer-dist/, 'the bytes that are verified must be the bytes that are published');
+});
+
+await step("the installer reads a program's exit code reliably", () => {
+  // Windows PowerShell 5.1 does not fill in ExitCode on the process object that
+  // Start-Process -PassThru returns: it comes back empty, every time, for a
+  // program that has clearly exited. The installer read that as a failure and
+  // refused a program that had just answered with its own status JSON - on a
+  // Windows runner, on a machine where nothing was wrong - and the empty
+  // "(exit )" in a shop's install.log came out of the same hole. Everything
+  // that runs the till and needs the code uses the .NET process object, which
+  // reports the code it was given.
+  for (const file of ['install.ps1', 'verify.ps1']) {
+    const text = codeOnly(read(path.join(payloadDir, file)));
+    assert.match(text, /New-Object System\.Diagnostics\.Process/, `${file} must take the exit code from a .NET process object`);
+    assert.ok(!/Start-Process/.test(text), `${file} must not run the till through Start-Process`);
+  }
+
+  // And the probe does not decide on the number alone: what proves the program
+  // runs is the program answering. A blocked, quarantined or mis-built one
+  // prints nothing, so it still fails there.
+  const installer = codeOnly(read(path.join(payloadDir, 'install.ps1')));
+  assert.match(installer, /\$exitCodeRead = \(\$null -ne \$probe\.ExitCode\)/, 'an unreadable exit code must be told apart from a failing one');
+  assert.match(installer, /\$probe\.StdOut -match '"device_id"'/, 'a program that answers with its own status has to count as running');
+
+  const verifier = codeOnly(read(path.join(offlineDir, 'installer', 'verify-windows.ps1')));
+  assert.match(verifier, /New-Object System\.Diagnostics\.Process/, 'the Windows verifier needs a readable exit code too');
+
+  // cmd.exe parses its own command line: quoting install.cmd's path a second
+  // time (the verifier quotes every argument it is given) makes cmd look for a
+  // file whose name has quote characters in it, and the install then fails with
+  // "'\"C:\...\install.cmd\""' is not recognized as an internal or external
+  // command" - which is exactly what one red run reported, and it said nothing
+  // about the installer. The line cmd gets has to be built once, for cmd.
+  // ...and a run that cannot even unpack has to say so through the same door as
+  // every other failure: no exit path may end without a report, because a run
+  // that ends without one is a run nobody can diagnose. Two red runs of this job
+  // produced nothing but "Process completed with exit code 1".
+  assert.match(verifier, /function Complete-Run/, 'every exit must go through one reporting path');
+  assert.match(verifier, /'there is a program to run'[\s\S]{0,300}?Complete-Run/, 'a run that finds no program must still report');
+  assert.equal((verifier.match(/^\s*exit 1\s*$/gm) || []).length, 1, 'the only exit 1 in the verifier is the one Complete-Run takes');
+
+  assert.match(verifier, /-RawArguments/, 'the verifier must not let install.cmd go through the generic argument quoting');
+  assert.match(verifier, /\/s \/c ""\{0\}" \{1\}"/, "cmd's own /s /c \"\"<path>\" <args>\" form is the one it parses correctly");
+});
+
+await step('the installer says why the program did not run', () => {
+  // In the field the install stopped with "did not run on this PC (exit )." -
+  // Windows reported no exit code for a program that aborted, and the message
+  // left a shop with nothing to act on. The code is now named when it is
+  // missing, the program's own words are written into the log line by line, and
+  // an abort inside its own runtime is called what it is: a broken build.
+  const text = codeOnly(read(path.join(payloadDir, 'install.ps1')));
+
+  assert.match(text, /\$probeCode = 'unknown'/, 'a missing exit code must be named, not printed as an empty pair of brackets');
+  assert.match(text, /program says: /, "the program's own output must reach the log");
+  assert.match(text, /SeaDeserializer\|Assertion failed/, 'the message must recognise a runtime-plane abort and say it is a broken build');
+  assert.match(text, /RUNTIME\.txt/, 'the log must record which runtime the payload carries');
+});
+
 await step('the payload check itself is wired into the build and the release', () => {
   const build = read(path.join(offlineDir, 'installer', 'build-windows.sh'));
   assert.match(build, /check-payload\.mjs"\s+"\$INSTALLER\/payload"/, 'the build must check the payload in version control before it builds anything');
