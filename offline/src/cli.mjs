@@ -19,6 +19,9 @@ import { counts, recentLog, retryFailed } from './queue.mjs';
 import { suggestDeviceId } from './ids.mjs';
 import { assertUpgradeSafe, createBackup, restoreBackup } from './backup.mjs';
 
+/** Commands that must not have a database opened (and so created) for them. */
+const LAZY_COMMANDS = new Set(['verify', 'restore', 'serve']);
+
 
 /**
  * Runs the requested command. Everything lives inside this function so the
@@ -28,9 +31,16 @@ import { assertUpgradeSafe, createBackup, restoreBackup } from './backup.mjs';
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const flags = parseFlags(rest);
-  const db = openDatabase();
 
-  const deviceId = getMeta(db, 'device_id');
+  // The database is opened on demand. A command that only reports, or that opens
+  // its own, must not have one created for it: `--cli verify` is what the Windows
+  // installer runs before it replaces anything, and a check that creates the
+  // thing it is checking is not a check. Neither should printing the usage text
+  // leave a database behind on a PC that was only asked a question.
+  const lazy = command === undefined || LAZY_COMMANDS.has(command);
+  const db = lazy ? null : openDatabase();
+
+  const deviceId = db ? getMeta(db, 'device_id') : null;
 
   switch (command) {
     case 'init': {
@@ -127,8 +137,10 @@ async function main() {
     }
 
     case 'verify': {
-      // What an installer runs before replacing application files.
-      console.log(assertUpgradeSafe({ dataDir: defaultDataDir() }));
+      // What an installer runs before replacing application files. Printed as
+      // JSON on purpose: the Windows installer parses this to decide whether an
+      // update is safe, and "[object Object]" tells it nothing.
+      console.log(JSON.stringify(assertUpgradeSafe({ dataDir: defaultDataDir() }), null, 2));
       break;
     }
 

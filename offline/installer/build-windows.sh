@@ -8,6 +8,9 @@
 #
 # What it does, in order:
 #
+#   0. checks the installer scripts can be read by the Windows hosts that run
+#      them (ASCII, CRLF, byte-order marks, balanced quoting) — cheap, so it
+#      runs before anything is downloaded or compiled
 #   1. bundles the till into one CommonJS file            (esbuild)
 #   2. builds a Node single-executable blob, embedding the screen (node --experimental-sea-config)
 #   3. injects it into a Windows node.exe                 (postject)
@@ -103,6 +106,16 @@ done
 # filesystems; the build would otherwise fail at the packing step.
 chmod +x "$ESBUILD" "$POSTJECT" "$SEVENZA" 2>/dev/null || true
 "$SEVENZA" i >/dev/null 2>&1 || die "the 7-Zip binary at $SEVENZA will not run"
+
+# ── 0. the installer scripts, before anything is built ──────────────────────
+# These files are read by cmd.exe and Windows PowerShell 5.1 with the machine's
+# own code page, and neither can be run here, so what breaks them is checked
+# instead: a single typographic character in a .ps1 is enough to make Windows
+# PowerShell misread the whole script and stop the install with an error that
+# points somewhere else entirely. Failing here costs seconds; failing on a shop's
+# till costs a visit.
+log "Checking the installer payload in version control"
+"$NODE" "$INSTALLER/check-payload.mjs" "$INSTALLER/payload" || die "the installer payload would not run on a Windows PC"
 
 # ── 1. one file ─────────────────────────────────────────────────────────────
 log "Bundling the till (esbuild)"
@@ -233,21 +246,24 @@ cp "$INSTALLER/payload/README-FIRST.txt" "$PAYLOAD/"
   echo "verify against: https://nodejs.org/dist/  (SHASUMS256.txt)"
 } > "$PAYLOAD/app/RUNTIME.txt"
 
-# Windows text files must have CRLF endings: cmd.exe mis-parses LF-only .cmd
-# files. Enforced here so a checkout on any platform builds a runnable payload.
-python3 - "$PAYLOAD" <<'PY'
-import glob, os, sys
-root = sys.argv[1]
-for pattern in ('**/*.cmd', '**/*.ps1', '**/*.txt'):
-    for path in glob.glob(os.path.join(root, pattern), recursive=True):
-        with open(path, 'rb') as fh:
-            data = fh.read()
-        fixed = data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
-        if fixed != data:
-            with open(path, 'wb') as fh:
-                fh.write(fixed)
-            print(f"  crlf: {os.path.relpath(path, root)}")
-PY
+# Windows text files are where this build has been bitten before, so the payload
+# is normalised *and* verified rather than just normalised:
+#
+#   * cmd.exe mis-parses LF-only .cmd files (labels and parenthesised blocks),
+#     and prints a byte-order mark as a stray character before @echo off;
+#   * Windows PowerShell 5.1 reads a .ps1 that has no byte-order mark with the
+#     machine's ANSI code page, where the UTF-8 bytes of a typographic dash
+#     decode into a character PowerShell accepts as a string delimiter - one em
+#     dash in a comment is then enough to make the whole script unparseable, with
+#     an error reported far from the character that caused it.
+#
+# So: CRLF everywhere, ASCII everywhere, no mark on .cmd, a UTF-8 mark on the
+# .ps1 copies that ship, and the quoting proved to balance read both ways. The
+# real PowerShell parser runs too when pwsh is installed (it is on the CI
+# runners), which is the last word on whether a script parses.
+log "Checking the installer payload (ASCII, CRLF, marks, quoting)"
+"$NODE" "$INSTALLER/check-payload.mjs" "$PAYLOAD" --fix --bom --no-pwsh
+"$NODE" "$INSTALLER/check-payload.mjs" "$PAYLOAD" --require-crlf --require-bom
 
 # ── 6. the installer: a real .exe, assembled from a 7-Zip SFX stub ──────────
 log "Packing the installer"

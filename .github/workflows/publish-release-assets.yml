@@ -8,12 +8,22 @@
 # packing), verifies its own checksums, and attaches the three files to the
 # release — so the Assets section of the release page is what it claims to be.
 #
-# Two ways to run it:
-#   • workflow_dispatch — "Run workflow" (or `gh workflow run`), tag input
-#     chooses the release (default: latest).
-#   • pull_request that touches this very file, for when dispatch cannot be
-#     used (e.g. the workflow is not on the default branch yet); that run
-#     publishes to the `latest` release.
+# What to BUILD and what to UPLOAD TO are two different questions, and the
+# inputs keep them apart:
+#
+#   ref   branch/tag/commit to build from. Empty (the default) means the ref
+#         this run was dispatched on. Never point it at a release tag when
+#         re-cutting: the tag is the commit that shipped, and re-cutting means
+#         shipping that release's assets from the commit that fixed them.
+#   tag   which release to attach the assets to. "latest" (the default) means
+#         the repository's latest release.
+#
+# Run it:
+#   • a `v*` tag push — builds the tag, publishes to it.
+#   • workflow_dispatch — "Run workflow", or:
+#       gh workflow run publish-release-assets.yml --ref main -f tag=v1.0.0
+#     which rebuilds `main` and clobbers the v1.0.0 assets and notes. That is
+#     how a release is re-cut: same version, fixed bytes.
 #
 name: Publish release assets
 
@@ -24,12 +34,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to attach the built assets to'
+        description: 'Release to attach the assets to (tag name, or "latest")'
         required: false
         default: 'latest'
-  pull_request:
-    paths:
-      - '.github/workflows/publish-release-assets.yml'
+      ref:
+        description: 'Branch/tag/commit to build from (empty: the dispatched ref)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -46,9 +57,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # When triggered by a tag push, build that tag; dispatch builds the
-          # requested ref; PR builds the PR head.
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          # The `ref` input wins; otherwise build the ref this run belongs to
+          # (tag push → the tag, dispatch → the dispatched branch, which is
+          # what a re-cut needs).
+          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - uses: actions/setup-node@v4
         with:

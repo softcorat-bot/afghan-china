@@ -1,0 +1,12 @@
+# Line endings are part of the contract for the Windows installer payload:
+# cmd.exe mis-parses LF-only .cmd files (labels and parenthesised blocks), and
+# the 7-Zip SFX reads its configuration with CRLF. These paths are therefore
+# stored normalised and always checked out with CRLF, on every platform, so the
+# build never depends on a developer's core.autocrlf setting.
+offline/installer/payload/*.cmd   text eol=crlf
+offline/installer/payload/*.ps1   text eol=crlf
+offline/installer/payload/*.txt   text eol=crlf
+offline/installer/sfx-config.txt  text eol=crlf
+
+# Build and CI scripts run under bash.
+*.sh                              text eol=lf
