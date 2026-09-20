@@ -1,0 +1,81 @@
+#
+# Publishes the Windows deliverables as real release assets.
+#
+# The sandboxed build machines this repository is developed on cannot reach
+# uploads.github.com, so the release exists but its files do not. This workflow
+# runs on GitHub's own runners, rebuilds the installer from source with
+# installer/build-windows.sh (which self-tests the packaged blob before
+# packing), verifies its own checksums, and attaches the three files to the
+# release — so the Assets section of the release page is what it claims to be.
+#
+# Two ways to run it:
+#   • workflow_dispatch — "Run workflow" (or `gh workflow run`), tag input
+#     chooses the release (default: latest).
+#   • pull_request that touches this very file, for when dispatch cannot be
+#     used (e.g. the workflow is not on the default branch yet); that run
+#     publishes to the `latest` release.
+#
+name: Publish release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach the built assets to'
+        required: false
+        default: 'latest'
+  pull_request:
+    paths:
+      - '.github/workflows/publish-release-assets.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-release-assets-${{ github.event.inputs.tag || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-upload:
+    name: Rebuild the Windows deliverables and attach them to the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Build the tagged release commit itself on dispatch, so the notes
+          # stamp the tag's commit; PR runs fall back to the PR head.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the Windows deliverables
+        run: bash offline/installer/build-windows.sh
+
+      - name: Verify the build's own checksums
+        working-directory: offline/dist
+        run: |
+          set -euo pipefail
+          test -s SoftCora-POS-Setup.exe
+          test -s SoftCoraPOS-portable-win64.zip
+          test -s sha256.txt
+          [ "$(head -c 2 SoftCora-POS-Setup.exe)" = "MZ" ]
+          sha256sum -c sha256.txt
+          echo '✓ checksums match the exact artifacts being uploaded'
+
+      - name: Attach the assets to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || 'latest' }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY" \
+            offline/dist/SoftCora-POS-Setup.exe \
+            offline/dist/SoftCoraPOS-portable-win64.zip \
+            offline/dist/sha256.txt
+          gh release edit "$TAG" \
+            --notes-file offline/dist/RELEASE-NOTES.md \
+            --repo "$GITHUB_REPOSITORY"
+          echo "✓ assets attached and notes refreshed on the $TAG release"
