@@ -314,10 +314,27 @@ function Summarise-Output {
     return $single
 }
 
+# The end of an output is usually the part that says what went wrong, and the
+# part a truncated report loses: a health report ends with its `problems` array.
+function Summarise-OutputTail {
+    param([string]$Text)
+
+    if (-not $Text) { return '' }
+    $single = ($Text -replace '\s+', ' ').Trim()
+    if ($single.Length -gt 700) { return '...' + $single.Substring($single.Length - 700) }
+    return $single
+}
+
 function Get-ParsedJson {
     param([string]$Text)
 
-    try { return ($Text | ConvertFrom-Json) } catch { return $null }
+    # An empty string is not JSON, but in Windows PowerShell 5.1 it does not
+    # parse to *nothing* either - and a report built from whatever it parses to
+    # printed empty fields, which hid a whole failure behind "installed=".
+    if ($null -eq $Text) { return $null }
+    if (-not $Text.Trim()) { return $null }
+
+    try { return ($Text.Trim() | ConvertFrom-Json) } catch { return $null }
 }
 
 function Stop-Child {
@@ -584,21 +601,35 @@ if ($Install -and $workRoot) {
         -DataPath $shopData `
         -TimeoutSeconds 180
     $report = Get-ParsedJson $health.StdOut
-    $healthOk = ($health.ExitCode -eq 0 -and $null -ne $report -and $report.installed -eq $true)
-    $healthDetail = 'exit ' + $health.ExitCode + ': ' + (Summarise-Output ($health.StdErr + ' ' + $health.StdOut))
-    if ($null -ne $report -and $null -ne $report.PSObject.Properties['installed']) {
-        $healthDetail = 'installed=' + $report.installed + ', version ' + $report.version + ', problems ' + @($report.problems).Count
+    $reportKind = 'nothing'
+    if ($null -ne $report) { $reportKind = $report.GetType().Name }
+
+    # The report is JSON this repository writes itself, so the text is evidence
+    # in its own right: if the parse produced something unexpected, the words
+    # still say whether the till is installed.
+    $installedFromReport = ($null -ne $report -and $null -ne $report.PSObject.Properties['installed'] -and $report.installed -eq $true)
+    $installedFromText = ($health.StdOut -match '"installed"\s*:\s*true')
+    $healthOk = ($health.ExitCode -eq 0 -and ($installedFromReport -or $installedFromText))
+
+    # What a shop's support would need, in one line: the exit code, how much of
+    # each stream there was, what the parse produced, and the end of the output -
+    # where a health report keeps its `problems`.
+    $healthDetail = 'exit ' + $health.ExitCode
+    $healthDetail += ', stdout ' + $health.StdOut.Length + ' chars, stderr ' + $health.StdErr.Length + ' chars'
+    $healthDetail += ', parsed as ' + $reportKind
+    if ($installedFromReport) {
+        $healthDetail += ', version ' + $report.version + ', problems ' + @($report.problems).Count
     }
-    elseif ($null -ne $report) {
-        # A parseable object that is not a health report is still worth naming:
-        # printing empty fields is how one red run hid what had happened.
-        $healthDetail = 'the health check did not print a report: ' + (Summarise-Output ($health.StdErr + ' ' + $health.StdOut))
-    }
+    $healthDetail += ', output ends: ' + (Summarise-OutputTail ($health.StdErr + ' ' + $health.StdOut))
     Add-Check -Name 'verify.ps1 reports the installation as healthy' -Ok $healthOk -Detail $healthDetail
 
-    if ($null -ne $report -and $report.version) {
-        Add-Check -Name 'the installed version is the version in the payload' -Ok ($report.version -eq $expectedVersion) -Detail ('payload ' + $expectedVersion + ', installed ' + $report.version)
+    $installedVersion = ''
+    if ($null -ne $report -and $report.version) { $installedVersion = [string]$report.version }
+    else {
+        $found = [regex]::Match($health.StdOut, '"version"\s*:\s*"([^"]+)"')
+        if ($found.Success) { $installedVersion = $found.Groups[1].Value }
     }
+    Add-Check -Name 'the installed version is the version in the payload' -Ok ($installedVersion -eq $expectedVersion) -Detail ('payload ' + $expectedVersion + ', installed ' + $installedVersion)
 }
 elseif ($Install) {
     Add-Check -Name 'the installer runs on this PC' -Ok $false -Detail '-Install needs -Installer (the setup .exe to unpack)'
