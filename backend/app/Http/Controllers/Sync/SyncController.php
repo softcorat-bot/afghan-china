@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Sync;
 
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
+use App\Models\Company;
 use App\Models\PosDevice;
 use App\Models\SyncBatch;
 use App\Models\SyncConflict;
+use App\Models\User;
 use App\Services\Sync\ConflictResolver;
 use App\Services\Sync\SyncPuller;
 use App\Services\Sync\SyncPusher;

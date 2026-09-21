@@ -73,6 +73,15 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Offline Mode: every sync run, push/pull result, backup and restore.
+        'offline' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/offline.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 60),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

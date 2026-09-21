@@ -21,4 +21,9 @@ class RefundItem extends Model
     {
         return $this->belongsTo(Refund::class);
     }
+
+    public function saleItem(): BelongsTo
+    {
+        return $this->belongsTo(SaleItem::class);
+    }
 }

@@ -24,6 +24,8 @@ $app = Application::configure(basePath: $basePath)
             // guarded separately from the rest of the tenant app.
             'device_auth' => \App\Http\Middleware\DeviceAuth::class,
             'sync_admin' => \App\Http\Middleware\SyncAdmin::class,
+            // Sync Center: present on Offline installations only.
+            'offline.mode' => \App\Http\Middleware\OfflineMode::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

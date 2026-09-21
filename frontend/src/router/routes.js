@@ -94,6 +94,9 @@ const routes = [
       { path: 'pos-devices', name: 'pos-devices', component: () => import('@/pages/system/PosDevicesPage.vue'), meta: { permission: ['device-list', 'manage-devices'] } },
       { path: 'sync-monitor', name: 'sync-monitor', component: () => import('@/pages/system/SyncMonitorPage.vue'), meta: { permission: ['sync-log-list', 'sync-now', 'manage-devices'] } },
       { path: 'sync-conflicts', name: 'sync-conflicts', component: () => import('@/pages/system/SyncConflictsPage.vue'), meta: { permission: ['sync-conflict-list', 'resolve-sync-conflicts'] } },
+      // Sync Center: this installation's own sync agent (Offline Mode). On an
+      // Online installation the page explains there is nothing to synchronize.
+      { path: 'sync-center', name: 'sync-center', component: () => import('@/pages/system/SyncCenterPage.vue'), meta: { permission: ['sync-now', 'sync-log-list'] } },
 
       // Module previews — Products/Inventory, POS, Sales, Purchases... arrive per phase
       { path: 'coming-soon/:module', name: 'coming-soon', component: () => import('@/pages/ComingSoonPage.vue') },

@@ -119,6 +119,7 @@ export const menus = [
       { room: 'HardwareDevices', permission: 'dashboard-list', icon: 'fingerprint', name: 'HardwareDevices', status: true, color: 'black', url: '/hardware-devices', add_url: null, is_sub: [] },
       { room: 'PosDevices', permission: 'device-list', icon: 'point_of_sale', name: 'PosDevices', status: true, color: 'black', url: '/pos-devices', add_url: null, is_sub: [] },
       { room: 'SyncMonitor', permission: 'sync-log-list', icon: 'sync', name: 'SyncMonitor', status: true, color: 'black', url: '/sync-monitor', add_url: null, is_sub: [] },
+      { room: 'SyncCenter', permission: 'sync-now', icon: 'cloud_sync', name: 'SyncCenter', status: true, color: 'black', url: '/sync-center', add_url: null, is_sub: [] },
       { room: 'SyncConflicts', permission: 'sync-conflict-list', icon: 'sync_problem', name: 'SyncConflicts', status: true, color: 'black', url: '/sync-conflicts', add_url: null, is_sub: [] },
       { room: 'Trash', superAdmin: true, permission: null, icon: 'auto_delete', name: 'Trashes', status: true, color: 'black', url: '/trash', add_url: null, is_sub: [] },
       { room: 'ReceiptDesigner', permission: 'theme-list', icon: 'receipt_long', name: 'ReceiptDesigner', status: true, color: 'black', url: '/receipt-designer', add_url: null, is_sub: [] },
