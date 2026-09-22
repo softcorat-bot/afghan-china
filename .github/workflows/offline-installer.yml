@@ -97,7 +97,23 @@ jobs:
       - name: Compile the installer
         shell: pwsh
         run: |
-          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DAppVersion=$env:APP_VERSION installer\windows\AfghanChinaOffline.iss
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DAppVersion=$env:APP_VERSION installer\windows\AfghanChinaOffline.iss > compile.log 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            $raw = ''
+            if (Test-Path compile.log) { $raw = (Get-Content compile.log -Raw) }
+            if (-not $raw) { $raw = '(empty compile log)' }
+            $total = [Math]::Min(10500, $raw.Length)
+            $window = $raw.Substring($raw.Length - $total)
+            for ($i = 0; $i -lt 3; $i++) {
+              $start = $i * 3500
+              if ($start -ge $window.Length) { break }
+              $len = [Math]::Min(3500, $window.Length - $start)
+              $part = $window.Substring($start, $len)
+              $esc = $part -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
+              Write-Host "::error title=compile-tail-$i::$esc"
+            }
+            throw "installer compile failed ($LASTEXITCODE)"
+          }
           Get-ChildItem installer\windows\dist
 
       - name: Checksums
