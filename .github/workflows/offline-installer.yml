@@ -64,14 +64,20 @@ jobs:
       - name: Backend tests (offline agent)
         working-directory: backend
         run: |
-          php artisan test --filter=Offline 2>&1 | Tee-Object -FilePath offline-tests.log
+          php vendor/bin/phpunit --filter=Offline --debug 2>&1 | Tee-Object -FilePath offline-tests.log
           if ($LASTEXITCODE -ne 0) {
             $raw = ''
             if (Test-Path offline-tests.log) { $raw = (Get-Content offline-tests.log -Raw) }
             if (-not $raw) { $raw = '(empty test log)' }
-            $head = $raw.Substring(0, [Math]::Min(3500, $raw.Length))
-            $esc = $head -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
-            Write-Host "::error title=offline-tests::$esc"
+            $emit = {
+              param($title, $text)
+              $esc = $text -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
+              Write-Host "::error title=$title::$esc"
+            }
+            & $emit 'offline-tests-head' $raw.Substring(0, [Math]::Min(3000, $raw.Length))
+            if ($raw.Length -gt 3000) {
+              & $emit 'offline-tests-tail' $raw.Substring($raw.Length - [Math]::Min(3000, $raw.Length - 3000))
+            }
             throw "offline tests failed ($LASTEXITCODE)"
           }
 
