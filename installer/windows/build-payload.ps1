@@ -142,7 +142,10 @@ Copy-Item -Path (Join-Path $Templates '*') -Destination $OutDir -Recurse -Force
 # Windows hosts read these files with legacy code pages: non-ASCII bytes or LF
 # endings have bricked installs before. Refuse to ship a payload like that.
 $lintErrors = @()
-Get-ChildItem -Path $OutDir -Include *.cmd, *.iss, *.txt, *.template -Recurse | ForEach-Object {
+# The php/ runtime ships third-party docs (news.txt, readme-redist-bins.txt) that
+# legitimately contain non-ASCII bytes; only our own files must be ASCII-clean.
+Get-ChildItem -Path $OutDir -Include *.cmd, *.iss, *.txt, *.template -Recurse |
+  Where-Object { $_.FullName -notlike "$PhpDir*" } | ForEach-Object {
   $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
   if ($bytes | Where-Object { $_ -gt 127 }) { $lintErrors += "$($_.Name): non-ASCII byte found" }
 }
