@@ -57,7 +57,16 @@ jobs:
           composer install --no-interaction --no-progress
           if (-not (Test-Path .env)) { Copy-Item .env.example .env }
           php artisan key:generate
-          php artisan test --filter=Offline
+          php artisan test --filter=Offline 2>&1 | Tee-Object -FilePath offline-tests.log
+          if ($LASTEXITCODE -ne 0) {
+            $raw = ''
+            if (Test-Path offline-tests.log) { $raw = (Get-Content offline-tests.log -Raw) }
+            if (-not $raw) { $raw = '(empty test log)' }
+            $tail = $raw.Substring($raw.Length - [Math]::Min(5000, $raw.Length))
+            $esc = $tail -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
+            Write-Host "::error title=offline-tests-tail::$esc"
+            throw "offline tests failed ($LASTEXITCODE)"
+          }
 
       - name: Build the payload
         shell: pwsh
