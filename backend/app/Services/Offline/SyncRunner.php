@@ -131,9 +131,12 @@ class SyncRunner
 
             return $summary;
         } catch (OfflineSyncException $e) {
+            fwrite(STDERR, "\nOFFLINE-MARK: run catch entry\n");
             OfflineMeta::set('sync.last_run_at', now()->toIso8601String());
             OfflineMeta::set('sync.last_error', $e->getMessage());
+            fwrite(STDERR, "\nOFFLINE-MARK: run catch after meta\n");
             $log->warning('sync failed: '.$e->getMessage(), ['code' => $e->code]);
+            fwrite(STDERR, "\nOFFLINE-MARK: run catch before rethrow\n");
 
             throw $e;
         }

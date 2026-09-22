@@ -34,4 +34,32 @@ class ZzzOfflineProbeTest extends OfflineTestCase
 
         $this->assertTrue(true);
     }
+
+    public function test_fake_throw_runtime_exception_behavior(): void
+    {
+        Http::fake(fn () => throw new \RuntimeException('probe boom'));
+
+        try {
+            Http::timeout(10)->connectTimeout(5)->get('https://central.test/api/v1/sync/status');
+            fwrite(STDERR, "\nOFFLINE-PROBE fake-throw-runtime: NO THROW (unexpected)\n");
+        } catch (\Throwable $e) {
+            fwrite(STDERR, "\nOFFLINE-PROBE fake-throw-runtime threw ".get_class($e).': '.substr($e->getMessage(), 0, 120)."\n");
+        }
+
+        $this->assertTrue(true);
+    }
+
+    public function test_fake_throw_connection_exception_behavior(): void
+    {
+        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('probe network down'));
+
+        try {
+            Http::timeout(10)->connectTimeout(5)->get('https://central.test/api/v1/sync/status');
+            fwrite(STDERR, "\nOFFLINE-PROBE fake-throw-connection: NO THROW (unexpected)\n");
+        } catch (\Throwable $e) {
+            fwrite(STDERR, "\nOFFLINE-PROBE fake-throw-connection threw ".get_class($e).': '.substr($e->getMessage(), 0, 120)."\n");
+        }
+
+        $this->assertTrue(true);
+    }
 }
