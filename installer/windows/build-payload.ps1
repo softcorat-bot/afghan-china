@@ -9,18 +9,22 @@
 # Usage (CI):
 #   pwsh installer/windows/build-payload.ps1 -OutDir dist/payload -AppVersion 1.2.0
 #
-# Requires on the build machine: php (CLI, 8.3+), composer, node, pnpm.
+# Requires on the build machine: php (CLI, 8.4+), composer, node, pnpm.
 # What the SHOP's pc needs: nothing. The payload carries its own PHP runtime.
+#
+# The runtime pin MUST satisfy composer.lock's platform floor (Laravel 13.19 +
+# Symfony 8.1 need PHP >= 8.4.1). The 8.4 line ships VS17 (VS2022) binaries.
 param(
   [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
   [string]$OutDir = (Join-Path $PSScriptRoot 'payload'),
   [string]$AppVersion = '1.0.0',
-  [string]$PhpVersion = $env:AFGHANCHINA_PHP_VERSION
+  [string]$PhpVersion = $env:AFGHANCHINA_PHP_VERSION,
+  [string]$VsVersion = '17'
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not $PhpVersion) { $PhpVersion = '8.3.14' }
+if (-not $PhpVersion) { $PhpVersion = '8.4.25' }
 
 function Require-Command($name, $hint) {
   if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
@@ -44,7 +48,7 @@ if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
 # ── 1. PHP runtime (pinned embed build) ──────────────────────────────────────
-$PhpZip = "php-$PhpVersion-nts-Win32-vs16-x64.zip"
+$PhpZip = "php-$PhpVersion-nts-Win32-vs$VsVersion-x64.zip"
 $PhpUrl = "https://windows.php.net/downloads/releases/$PhpZip"
 $PhpDir = Join-Path $OutDir 'php'
 New-Item -ItemType Directory -Force $PhpDir | Out-Null
@@ -67,24 +71,23 @@ if ($actual -notmatch [regex]::Escape($PhpVersion)) {
   throw "Runtime version mismatch: expected $PhpVersion, got: $actual"
 }
 
-# Minimal php.ini: every extension Laravel + SQLite + uploads need, nothing else.
+# Minimal php.ini: enable every extension Laravel + SQLite + uploads need.
+# Some builds compile core extensions statically (no DLL to enable), others
+# ship them as DLLs - probing the ext/ dir keeps this correct either way,
+# and never emits "unable to load dynamic library" warnings.
+$wanted = @('curl', 'ctype', 'dom', 'fileinfo', 'filter', 'gd', 'hash', 'mbstring',
+  'openssl', 'pdo_sqlite', 'session', 'simplexml', 'sodium', 'sqlite3',
+  'tokenizer', 'xml', 'zip')
+$extLines = foreach ($name in $wanted) {
+  if (Test-Path (Join-Path $PhpDir "ext\php_$name.dll")) { "extension=$name" }
+}
 $ini = @"
 ; Afghan China Offline - bundled runtime configuration
 memory_limit = 512M
 max_execution_time = 300
 date.timezone = Asia/Kabul
 extension_dir = "ext"
-extension=curl
-extension=fileinfo
-extension=gd
-extension=mbstring
-extension=openssl
-extension=pdo_sqlite
-extension=sodium
-extension=sqlite3
-extension=tokenizer
-extension=xml
-extension=zip
+$($extLines -join "`r`n")
 sqlite3.defensive = 1
 "@
 [System.IO.File]::WriteAllText((Join-Path $PhpDir 'php.ini'), $ini, [System.Text.Encoding]::ASCII)
@@ -145,8 +148,15 @@ Get-ChildItem -Path $OutDir -Include *.cmd, *.iss, *.txt, *.template -Recurse | 
 if ($lintErrors.Count -gt 0) { throw ($lintErrors -join "`n") }
 
 # ── 6. Smoke test the payload's own runtime ──────────────────────────────────
-$probe = & $embedPhp -r "echo (int) extension_loaded('pdo_sqlite'), PHP_EOL;"
-if ($probe.Trim() -ne '1') { throw 'Bundled PHP cannot load pdo_sqlite.' }
+# Laravel's hard requirements (composer.lock) plus the offline stack's SQLite.
+$required = @('ctype', 'filter', 'hash', 'mbstring', 'openssl', 'session',
+  'tokenizer', 'pdo_sqlite', 'sqlite3')
+$missing = @()
+foreach ($name in $required) {
+  $loaded = (& $embedPhp -r "echo (int) extension_loaded('$name'), PHP_EOL;").Trim()
+  if ($loaded -ne '1') { $missing += $name }
+}
+if ($missing.Count -gt 0) { throw ("Bundled PHP is missing required extensions: " + ($missing -join ', ')) }
 
 Write-Host "==> payload ready: $OutDir"
 Get-ChildItem $OutDir | Format-Table Name

@@ -33,7 +33,7 @@ Check 'payload present' {
 Check 'bundled php runs with sqlite' {
   $v = (& $php -v | Select-Object -First 1)
   if ($v -notmatch 'PHP 8\.4') { throw "unexpected runtime: $v" }
-  $sqlite = (& $php -r "echo (int) extension_loaded('pdo_sqlite"), PHP_EOL;")
+  $sqlite = (& $php -r "echo (int) extension_loaded('pdo_sqlite'), PHP_EOL;")
   if ($sqlite.Trim() -ne '1') { throw 'pdo_sqlite not loaded' }
 }
 
@@ -62,7 +62,7 @@ Check 'server boots and serves api + app' {
       $app = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/app/" -TimeoutSec 10 -UseBasicParsing
       if ($app.StatusCode -ne 200 -or $app.Content -notmatch 'Afghan') { throw 'GET /app/ did not serve the dashboard' }
 
-      $api = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/offline/status" -TimeoutSec 10 -UseBasicParsing -SkipHttpErrorCheck
+      $api = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/offline/status" -TimeoutSec 10 -UseBasicParsing -SkipHttpErrorCheck -Headers @{'Accept'='application/json'}
       if ($api.StatusCode -ne 401 -and $api.StatusCode -ne 200) { throw "GET /api/offline/status -> $($api.StatusCode), expected 401 (auth) or 200" }
     } finally {
       Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue

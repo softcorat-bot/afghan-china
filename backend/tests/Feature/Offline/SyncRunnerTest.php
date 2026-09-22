@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Offline;
 
+use App\Models\Customer;
 use App\Models\OfflineMeta;
 use App\Models\OfflineOutbox;
 use App\Models\Product;
@@ -74,8 +75,53 @@ class SyncRunnerTest extends OfflineTestCase
         $this->assertNotNull(OfflineMeta::get('sync.last_ok_at'));
 
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/v1/sync/push')
-            && $r->header('X-Device-Id') === ['TEST-DEVICE']
-            && $r->header('Authorization') === ['Bearer TEST-TOKEN']);
+            && $r->hasHeader('X-Device-Id', 'TEST-DEVICE')
+            && $r->hasHeader('Authorization', 'Bearer TEST-TOKEN'));
+    }
+
+    public function test_push_rebuilds_payload_from_live_row(): void
+    {
+        $customer = Customer::create([
+            'company_id' => $this->company->id,
+            'name' => 'Rebuild Me',
+            'phone' => '0700111222',
+        ]);
+
+        // Stale snapshot (as if captured before later writes were committed).
+        $row = OfflineOutbox::create([
+            'change_uuid' => (string) Str::uuid(),
+            'entity_type' => 'customer',
+            'entity_uuid' => $customer->uuid,
+            'operation' => 'create',
+            'payload' => ['name' => 'Rebuild Me', 'phone' => '0700000000'],
+            'status' => OfflineOutbox::STATUS_PENDING,
+            'captured_at' => now(),
+        ]);
+
+        Customer::withoutEvents(fn () => $customer->update(['phone' => '0700999888']));
+
+        Http::fake([
+            '*v1/sync/status' => Http::response(['server_seq' => 1, 'conflicts_pending' => 0]),
+            '*v1/sync/heartbeat' => Http::response(['ok' => true]),
+            '*v1/sync/push' => Http::response([
+                'batch_uuid' => 'b9',
+                'results' => [['change_uuid' => $row->change_uuid, 'entity_type' => 'customer', 'uuid' => $row->entity_uuid, 'status' => 'applied']],
+                'summary' => ['applied' => 1],
+            ]),
+            '*v1/sync/context' => Http::response(['company' => null]),
+            '*v1/sync/pull' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
+            '*v1/sync/ack' => Http::response(['ok' => true]),
+            '*v1/sync/conflicts' => Http::response(['pending' => 0]),
+        ]);
+
+        $summary = SyncRunner::make()->run(['reason' => 'test']);
+
+        $this->assertTrue($summary['ok']);
+
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/v1/sync/push')
+            && ($r->data()['changes'][0]['payload']['phone'] ?? null) === '0700999888');
+
+        $this->assertSame('0700999888', $row->fresh()->payload['phone']);
     }
 
     public function test_duplicate_replay_marks_synced_without_double_apply(): void

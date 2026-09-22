@@ -43,17 +43,13 @@ class CentralClient
     {
         $this->requireBase();
 
-        try {
-            $response = $this->plain()->post($this->base().'/api/v1/sync/register', array_filter([
-                'device_id' => $deviceId,
-                'activation_code' => $activationCode,
-                'name' => $name ?: $deviceId,
-                'platform' => 'windows-offline',
-                'app_version' => (string) config('offline.app_version'),
-            ]));
-        } catch (ConnectionException $e) {
-            throw OfflineSyncException::connection($e);
-        }
+        $response = $this->send(fn () => $this->plain()->post($this->base().'/api/v1/sync/register', array_filter([
+            'device_id' => $deviceId,
+            'activation_code' => $activationCode,
+            'name' => $name ?: $deviceId,
+            'platform' => 'windows-offline',
+            'app_version' => (string) config('offline.app_version'),
+        ])));
 
         if ($response->status() === 422) {
             throw OfflineSyncException::device(
@@ -68,65 +64,95 @@ class CentralClient
 
     public function status(int $timeoutSeconds): array
     {
-        return $this->decode($this->authed()->timeout($timeoutSeconds)->get($this->base().'/api/v1/sync/status'), 'status');
+        return $this->decode($this->send(
+            fn () => $this->authed()->timeout($timeoutSeconds)->get($this->base().'/api/v1/sync/status')
+        ), 'status');
     }
 
     public function heartbeat(array $stats): array
     {
-        return $this->decode($this->authed()->post($this->base().'/api/v1/sync/heartbeat', array_merge([
-            'app_version' => (string) config('offline.app_version'),
-            'os_version' => php_uname('s').' '.php_uname('r'),
-        ], $stats)), 'heartbeat');
+        return $this->decode($this->send(
+            fn () => $this->authed()->post($this->base().'/api/v1/sync/heartbeat', array_merge([
+                'app_version' => (string) config('offline.app_version'),
+                'os_version' => php_uname('s').' '.php_uname('r'),
+            ], $stats))
+        ), 'heartbeat');
     }
 
     /** @param array<int, array> $changes */
     public function push(array $changes, ?string $batchUuid = null): array
     {
-        return $this->decode($this->authed()->post($this->base().'/api/v1/sync/push', [
-            'batch_uuid' => $batchUuid ?: (string) Str::uuid(),
-            'app_version' => (string) config('offline.app_version'),
-            'changes' => array_values($changes),
-        ]), 'push');
+        return $this->decode($this->send(
+            fn () => $this->authed()->post($this->base().'/api/v1/sync/push', [
+                'batch_uuid' => $batchUuid ?: (string) Str::uuid(),
+                'app_version' => (string) config('offline.app_version'),
+                'changes' => array_values($changes),
+            ])
+        ), 'push');
     }
 
     public function pull(int $sinceSeq, array $tables = [], ?int $limit = null): array
     {
-        return $this->decode($this->authed()->get($this->base().'/api/v1/sync/pull', [
-            'since_seq' => max(0, $sinceSeq),
-            'tables' => implode(',', $tables),
-            'limit' => $limit ?: (int) config('offline.pull_limit', 500),
-            'app_version' => (string) config('offline.app_version'),
-        ]), 'pull');
+        return $this->decode($this->send(
+            fn () => $this->authed()->get($this->base().'/api/v1/sync/pull', [
+                'since_seq' => max(0, $sinceSeq),
+                'tables' => implode(',', $tables),
+                'limit' => $limit ?: (int) config('offline.pull_limit', 500),
+                'app_version' => (string) config('offline.app_version'),
+            ])
+        ), 'pull');
     }
 
     public function ack(int $cursor, array $applied = [], array $failed = [], ?string $message = null): array
     {
-        return $this->decode($this->authed()->post($this->base().'/api/v1/sync/ack', array_filter([
-            'cursor' => $cursor,
-            'applied' => $applied,
-            'failed' => $failed,
-            'message' => $message,
-            'app_version' => (string) config('offline.app_version'),
-        ])), 'ack');
+        return $this->decode($this->send(
+            fn () => $this->authed()->post($this->base().'/api/v1/sync/ack', array_filter([
+                'cursor' => $cursor,
+                'applied' => $applied,
+                'failed' => $failed,
+                'message' => $message,
+                'app_version' => (string) config('offline.app_version'),
+            ]))
+        ), 'ack');
     }
 
     /** Seed context: company + branch rows and the RBAC snapshot. */
     public function context(): array
     {
-        return $this->decode($this->authed()->get($this->base().'/api/v1/sync/context'), 'context');
+        return $this->decode($this->send(
+            fn () => $this->authed()->get($this->base().'/api/v1/sync/context')
+        ), 'context');
     }
 
     public function conflicts(bool $pendingOnly = false, int $limit = 100): array
     {
-        return $this->decode($this->authed()->get($this->base().'/api/v1/sync/conflicts', [
-            'pending_only' => $pendingOnly,
-            'limit' => $limit,
-        ]), 'conflicts');
+        return $this->decode($this->send(
+            fn () => $this->authed()->get($this->base().'/api/v1/sync/conflicts', [
+                'pending_only' => $pendingOnly,
+                'limit' => $limit,
+            ])
+        ), 'conflicts');
     }
 
     public function rotateToken(): array
     {
-        return $this->decode($this->authed()->post($this->base().'/api/v1/sync/token/rotate'), 'token/rotate');
+        return $this->decode($this->send(
+            fn () => $this->authed()->post($this->base().'/api/v1/sync/token/rotate')
+        ), 'token/rotate');
+    }
+
+    /**
+     * Every transport failure becomes an OfflineSyncException — never a raw
+     * Guzzle/HTTP exception — so callers have exactly one failure type and the
+     * outbox/cursor always stay retryable.
+     */
+    private function send(callable $request): \Illuminate\Http\Client\Response
+    {
+        try {
+            return $request();
+        } catch (ConnectionException $e) {
+            throw OfflineSyncException::connection($e);
+        }
     }
 
     private function plain(): PendingRequest

@@ -146,6 +146,10 @@ class SyncRunner
             $ids = $batch->pluck('id')->all();
             OfflineOutbox::query()->whereIn('id', $ids)->update(['status' => OfflineOutbox::STATUS_PROCESSING]);
 
+            foreach ($batch as $row) {
+                $this->refreshPayload($row);
+            }
+
             $changes = $batch->map(fn ($row) => [
                 'change_uuid' => $row->change_uuid,
                 'entity_type' => $row->entity_type,
@@ -199,6 +203,56 @@ class SyncRunner
         }
 
         return $result;
+    }
+
+    /**
+     * Rebuild the payload from the live row just before pushing.
+     *
+     * The outbox snapshot is captured when the model event fires — for a sale
+     * that is *before* its lines and payments are written (same transaction,
+     * later statements). Rebuilding at push time means Central always receives
+     * the committed, complete business document, including any later edits.
+     * When the row cannot be resolved (or the rebuild fails), the stored
+     * snapshot is pushed instead — a stale payload beats no payload, and the
+     * server still validates everything. Tombstones are never rebuilt.
+     */
+    private function refreshPayload(OfflineOutbox $row): void
+    {
+        if ($row->operation === 'delete') {
+            return;
+        }
+
+        $models = array_flip(config('offline.observed', []));
+        $class = $models[$row->entity_type] ?? null;
+
+        if (! $class || ! class_exists($class)) {
+            return;
+        }
+
+        $query = $class::withoutGlobalScopes()->where('uuid', $row->entity_uuid);
+
+        if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses_recursive($class), true)) {
+            $query = $query->withTrashed();
+        }
+
+        $model = $query->first();
+
+        if (! $model) {
+            return;
+        }
+
+        try {
+            $change = app(ChangeBuilder::class)->build($model, $row->entity_type, $row->operation);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return;
+        }
+
+        $row->forceFill([
+            'payload' => $change['payload'],
+            'base_revision' => $change['base_revision'] ?? $row->base_revision,
+        ])->save();
     }
 
     private function markSynced(OfflineOutbox $row, array $answer, array &$result, string $bucket): void
