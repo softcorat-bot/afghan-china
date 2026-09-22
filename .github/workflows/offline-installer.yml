@@ -51,13 +51,37 @@ jobs:
           extensions: ctype, curl, dom, fileinfo, filter, mbstring, openssl, pdo_sqlite, session, sodium, sqlite3, tokenizer, xml, zip
           tools: composer
 
+      - name: Install backend dependencies
+        working-directory: backend
+        run: composer install --no-interaction --no-progress
+
+      - name: Prepare backend env
+        working-directory: backend
+        run: |
+          if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+          php artisan key:generate
+
       - name: Backend tests (offline agent)
         working-directory: backend
         run: |
-          composer install --no-interaction --no-progress
-          if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-          php artisan key:generate
-          php artisan test --filter=Offline
+          php artisan test --filter=Offline 2>&1 | Tee-Object -FilePath offline-tests.log
+          if ($LASTEXITCODE -ne 0) { throw "offline tests failed ($LASTEXITCODE)" }
+
+      - name: Report test output on failure
+        if: failure() && github.event_name == 'pull_request'
+        working-directory: backend
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tail = '(no offline-tests.log captured - the failure was in an earlier step)'
+          if (Test-Path offline-tests.log) { $tail = (Get-Content offline-tests.log -Raw) }
+          if ($tail.Length -gt 55000) { $tail = '...[trimmed]...' + "`r`n" + $tail.Substring($tail.Length - 55000) }
+          $fence = [string][char]96 + [string][char]96 + [string][char]96
+          $body = "## Backend tests failed on $($env:GITHUB_SHA) (run $($env:GITHUB_RUN_ID))`r`n`r`n"
+          $body += "<details><summary>offline-tests.log</summary>`r`n`r`n$fence`r`n$tail`r`n$fence`r`n</details>`r`n"
+          $body += "`r`n_(Temporary debug comment - removed once CI is green.)_`r`n"
+          Set-Content -Path pr-comment.md -Value $body -Encoding utf8
+          gh pr comment ${{ github.event.pull_request.number }} --body-file pr-comment.md
 
       - name: Build the payload
         shell: pwsh
