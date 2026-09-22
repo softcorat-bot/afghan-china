@@ -49,7 +49,7 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
 
 # ── 1. PHP runtime (pinned embed build) ──────────────────────────────────────
 $PhpZip = "php-$PhpVersion-nts-Win32-vs$VsVersion-x64.zip"
-$PhpUrl = "https://windows.php.net/downloads/releases/$PhpZip"
+$PhpUrl = "https://downloads.php.net/~windows/releases/archives/$PhpZip"
 $PhpDir = Join-Path $OutDir 'php'
 New-Item -ItemType Directory -Force $PhpDir | Out-Null
 
@@ -59,7 +59,7 @@ if (-not (Test-Path $zipPath)) {
   try {
     Invoke-WebRequest -Uri $PhpUrl -OutFile $zipPath
   } catch {
-    throw "Could not download $PhpUrl. The PHP pin may have moved; retry with -PhpVersion <exact> (see https://windows.php.net/download). $_"
+    throw "Could not download $PhpUrl. The PHP pin may have moved; retry with -PhpVersion <exact> (see https://www.php.net/downloads.php). $_"
   }
 }
 Expand-Archive -Path $zipPath -DestinationPath $PhpDir -Force
