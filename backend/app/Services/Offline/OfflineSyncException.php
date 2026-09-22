@@ -12,9 +12,11 @@ use RuntimeException;
  */
 class OfflineSyncException extends RuntimeException
 {
+    // NOTE: the machine code is deliberately NOT named `$code` — Exception
+    // already owns an (int) $code, and redeclaring it as string is a fatal.
     public function __construct(
         string $message,
-        public readonly string $code = 'sync_error',
+        public readonly string $syncCode = 'sync_error',
         public readonly bool $deviceRejected = false,
         public readonly ?int $httpStatus = null,
         ?\Throwable $previous = null,

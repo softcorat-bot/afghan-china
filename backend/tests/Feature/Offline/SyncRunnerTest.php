@@ -204,7 +204,7 @@ class SyncRunnerTest extends OfflineTestCase
             (new SyncRunner($client, new PullApplier))->run(['reason' => 'test']);
             $this->fail('expected OfflineSyncException');
         } catch (OfflineSyncException $e) {
-            $this->assertSame('central_unreachable', $e->code);
+            $this->assertSame('central_unreachable', $e->syncCode);
         }
 
         $this->assertSame(OfflineOutbox::STATUS_PENDING, $row->fresh()->status);
@@ -224,7 +224,7 @@ class SyncRunnerTest extends OfflineTestCase
         try {
             SyncRunner::make()->run(['reason' => 'test']);
         } catch (OfflineSyncException $e) {
-            $this->assertSame('offline_not_configured', $e->code);
+            $this->assertSame('offline_not_configured', $e->syncCode);
             $this->assertStringContainsString('offline:register', $e->getMessage());
 
             throw $e;

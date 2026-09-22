@@ -92,7 +92,7 @@ class SyncCenterController extends Controller
         } catch (OfflineSyncException $e) {
             return response()->json([
                 'ok' => false,
-                'code' => $e->code,
+                'code' => $e->syncCode,
                 'message' => $e->getMessage(),
                 'device_rejected' => $e->deviceRejected,
             ], $e->deviceRejected ? 403 : 502);
@@ -116,7 +116,7 @@ class SyncCenterController extends Controller
         try {
             $answer = CentralClient::fromIdentity()->register($deviceId, $data['activation_code'], $data['name'] ?? null);
         } catch (OfflineSyncException $e) {
-            return response()->json(['ok' => false, 'code' => $e->code, 'message' => $e->getMessage()], 422);
+            return response()->json(['ok' => false, 'code' => $e->syncCode, 'message' => $e->getMessage()], 422);
         }
 
         DeviceIdentity::save([

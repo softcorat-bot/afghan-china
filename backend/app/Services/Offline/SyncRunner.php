@@ -120,7 +120,7 @@ class SyncRunner
         } catch (OfflineSyncException $e) {
             OfflineMeta::set('sync.last_run_at', now()->toIso8601String());
             OfflineMeta::set('sync.last_error', $e->getMessage());
-            $log->warning('sync failed: '.$e->getMessage(), ['code' => $e->code]);
+            $log->warning('sync failed: '.$e->getMessage(), ['code' => $e->syncCode]);
 
             throw $e;
         }

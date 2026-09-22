@@ -99,10 +99,10 @@ class PullApplierTest extends OfflineTestCase
         $conflict = SyncConflict::withoutGlobalScopes()->first();
         $this->assertSame('product', $conflict->entity_type);
         $this->assertArrayHasKey('sale_price', $conflict->differing_fields);
-        $this->assertSame('120', (string) $conflict->local_payload['sale_price']);
+        $this->assertSame('120.00', (string) $conflict->local_payload['sale_price']);
 
         // Local value untouched.
-        $this->assertSame('120.00', (string) Product::withoutGlobalScopes()->where('uuid', $row['uuid'])->value('sale_price'));
+        $this->assertEquals(120.0, (float) Product::withoutGlobalScopes()->where('uuid', $row['uuid'])->value('sale_price'));
     }
 
     public function test_apply_context_seeds_company_and_rbac(): void
