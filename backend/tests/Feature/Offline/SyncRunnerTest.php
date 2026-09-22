@@ -25,7 +25,7 @@ class SyncRunnerTest extends OfflineTestCase
         config()->set('offline.device_token', 'TEST-TOKEN');
     }
 
-    private function queueChange(string $entity = 'customer', string $uuid = null): OfflineOutbox
+    private function queueChange(string $entity = 'customer', ?string $uuid = null): OfflineOutbox
     {
         return OfflineOutbox::create([
             'change_uuid' => (string) Str::uuid(),
