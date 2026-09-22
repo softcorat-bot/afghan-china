@@ -57,38 +57,14 @@ jobs:
           composer install --no-interaction --no-progress
           if (-not (Test-Path .env)) { Copy-Item .env.example .env }
           php artisan key:generate
-          php artisan test --filter=Offline 2>&1 | Tee-Object -FilePath offline-tests.log
-          if ($LASTEXITCODE -ne 0) {
-            $raw = ''
-            if (Test-Path offline-tests.log) { $raw = (Get-Content offline-tests.log -Raw) }
-            if (-not $raw) { $raw = '(empty test log)' }
-            $tail = $raw.Substring($raw.Length - [Math]::Min(5000, $raw.Length))
-            $esc = $tail -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
-            Write-Host "::error title=offline-tests-tail::$esc"
-            throw "offline tests failed ($LASTEXITCODE)"
-          }
+          php artisan test --filter=Offline
 
       - name: Build the payload
         shell: pwsh
         run: |
           powershell -ExecutionPolicy Bypass -File installer\windows\build-payload.ps1 `
-            -OutDir installer\windows\payload -AppVersion $env:APP_VERSION > payload-build.log 2>&1
-          if ($LASTEXITCODE -ne 0) {
-            $raw = ''
-            if (Test-Path payload-build.log) { $raw = (Get-Content payload-build.log -Raw) }
-            if (-not $raw) { $raw = '(empty build log)' }
-            $total = [Math]::Min(10500, $raw.Length)
-            $window = $raw.Substring($raw.Length - $total)
-            for ($i = 0; $i -lt 3; $i++) {
-              $start = $i * 3500
-              if ($start -ge $window.Length) { break }
-              $len = [Math]::Min(3500, $window.Length - $start)
-              $part = $window.Substring($start, $len)
-              $esc = $part -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
-              Write-Host "::error title=payload-tail-$i::$esc"
-            }
-            throw "payload build failed ($LASTEXITCODE)"
-          }
+            -OutDir installer\windows\payload -AppVersion $env:APP_VERSION 2>&1 | Tee-Object -FilePath payload-build.log
+          if ($LASTEXITCODE -ne 0) { throw "payload build failed ($LASTEXITCODE)" }
 
       - name: Install Inno Setup
         shell: pwsh
@@ -97,23 +73,8 @@ jobs:
       - name: Compile the installer
         shell: pwsh
         run: |
-          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DAppVersion=$env:APP_VERSION installer\windows\AfghanChinaOffline.iss > compile.log 2>&1
-          if ($LASTEXITCODE -ne 0) {
-            $raw = ''
-            if (Test-Path compile.log) { $raw = (Get-Content compile.log -Raw) }
-            if (-not $raw) { $raw = '(empty compile log)' }
-            $total = [Math]::Min(10500, $raw.Length)
-            $window = $raw.Substring($raw.Length - $total)
-            for ($i = 0; $i -lt 3; $i++) {
-              $start = $i * 3500
-              if ($start -ge $window.Length) { break }
-              $len = [Math]::Min(3500, $window.Length - $start)
-              $part = $window.Substring($start, $len)
-              $esc = $part -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
-              Write-Host "::error title=compile-tail-$i::$esc"
-            }
-            throw "installer compile failed ($LASTEXITCODE)"
-          }
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DAppVersion=$env:APP_VERSION installer\windows\AfghanChinaOffline.iss
+          if ($LASTEXITCODE -ne 0) { throw "installer compile failed ($LASTEXITCODE)" }
           Get-ChildItem installer\windows\dist
 
       - name: Checksums
@@ -154,25 +115,9 @@ jobs:
       - name: Silent install
         shell: pwsh
         run: |
-          $p = Start-Process dist\Afghan-China-Offline-Setup.exe -ArgumentList '/VERYSILENT','/NORESTART','/TASKS=""','/LOG=install.log' -Wait -PassThru
-          $phpExists = Test-Path 'C:\Program Files\Afghan China Offline\php\php.exe'
-          if (($p.ExitCode -ne 0) -or (-not $phpExists)) {
-            Write-Host "::error title=install-status::exit=$($p.ExitCode) php_exists=$phpExists"
-            $raw = ''
-            if (Test-Path install.log) { $raw = (Get-Content install.log -Raw) }
-            if (-not $raw) { $raw = '(empty install log)' }
-            $total = [Math]::Min(10500, $raw.Length)
-            $window = $raw.Substring($raw.Length - $total)
-            for ($i = 0; $i -lt 3; $i++) {
-              $start = $i * 3500
-              if ($start -ge $window.Length) { break }
-              $len = [Math]::Min(3500, $window.Length - $start)
-              $part = $window.Substring($start, $len)
-              $esc = $part -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
-              Write-Host "::error title=install-tail-$i::$esc"
-            }
-            throw "silent install failed (exit $($p.ExitCode), php_exists $phpExists)"
-          }
+          $p = Start-Process dist\Afghan-China-Offline-Setup.exe -ArgumentList '/VERYSILENT','/NORESTART','/TASKS=""' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "silent install failed (exit $($p.ExitCode))" }
+          if (-not (Test-Path 'C:\Program Files\Afghan China Offline\php\php.exe')) { throw 'install produced no payload' }
 
       - name: Verify the installation
         shell: pwsh
