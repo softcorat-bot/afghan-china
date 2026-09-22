@@ -45,12 +45,12 @@ class SyncCenterApiTest extends OfflineTestCase
         Sanctum::actingAs($this->admin());
 
         Http::fake([
-            '*v1/sync/status' => Http::response(['server_seq' => 3, 'conflicts_pending' => 0]),
-            '*v1/sync/heartbeat' => Http::response(['ok' => true]),
-            '*v1/sync/context' => Http::response([]),
-            '*v1/sync/pull' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
-            '*v1/sync/ack' => Http::response(['ok' => true]),
-            '*v1/sync/conflicts' => Http::response(['pending' => 0]),
+            '*v1/sync/status*' => Http::response(['server_seq' => 3, 'conflicts_pending' => 0]),
+            '*v1/sync/heartbeat*' => Http::response(['ok' => true]),
+            '*v1/sync/context*' => Http::response([]),
+            '*v1/sync/pull*' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
+            '*v1/sync/ack*' => Http::response(['ok' => true]),
+            '*v1/sync/conflicts*' => Http::response(['pending' => 0]),
         ]);
 
         $this->postJson('/api/offline/sync')

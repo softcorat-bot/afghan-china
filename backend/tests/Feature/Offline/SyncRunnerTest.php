@@ -43,15 +43,15 @@ class SyncRunnerTest extends OfflineTestCase
         $row = $this->queueChange();
 
         Http::fake([
-            '*v1/sync/status' => Http::response(['server_seq' => 100, 'conflicts_pending' => 0, 'server_time' => now()->toIso8601String()]),
-            '*v1/sync/heartbeat' => Http::response(['ok' => true]),
-            '*v1/sync/push' => Http::response([
+            '*v1/sync/status*' => Http::response(['server_seq' => 100, 'conflicts_pending' => 0, 'server_time' => now()->toIso8601String()]),
+            '*v1/sync/heartbeat*' => Http::response(['ok' => true]),
+            '*v1/sync/push*' => Http::response([
                 'batch_uuid' => 'b1',
                 'results' => [['change_uuid' => $row->change_uuid, 'entity_type' => 'customer', 'uuid' => $row->entity_uuid, 'status' => 'applied', 'server_id' => 7]],
                 'summary' => ['applied' => 1],
             ]),
-            '*v1/sync/context' => Http::response(['company' => null]),
-            '*v1/sync/pull' => Http::response([
+            '*v1/sync/context*' => Http::response(['company' => null]),
+            '*v1/sync/pull*' => Http::response([
                 'data' => ['products' => [[
                     'id' => 500, 'company_id' => $this->company->id, 'uuid' => (string) Str::uuid(),
                     'revision' => 1, 'sync_seq' => 42, 'name' => 'Pulled Tea', 'sale_price' => '10.00',
@@ -59,8 +59,8 @@ class SyncRunnerTest extends OfflineTestCase
                 ]]],
                 'deleted' => [], 'next_cursor' => 42, 'has_more' => false,
             ]),
-            '*v1/sync/ack' => Http::response(['ok' => true]),
-            '*v1/sync/conflicts' => Http::response(['pending' => 0]),
+            '*v1/sync/ack*' => Http::response(['ok' => true]),
+            '*v1/sync/conflicts*' => Http::response(['pending' => 0]),
         ]);
 
         $summary = SyncRunner::make()->run(['reason' => 'test']);
@@ -101,17 +101,17 @@ class SyncRunnerTest extends OfflineTestCase
         Customer::withoutEvents(fn () => $customer->update(['phone' => '0700999888']));
 
         Http::fake([
-            '*v1/sync/status' => Http::response(['server_seq' => 1, 'conflicts_pending' => 0]),
-            '*v1/sync/heartbeat' => Http::response(['ok' => true]),
-            '*v1/sync/push' => Http::response([
+            '*v1/sync/status*' => Http::response(['server_seq' => 1, 'conflicts_pending' => 0]),
+            '*v1/sync/heartbeat*' => Http::response(['ok' => true]),
+            '*v1/sync/push*' => Http::response([
                 'batch_uuid' => 'b9',
                 'results' => [['change_uuid' => $row->change_uuid, 'entity_type' => 'customer', 'uuid' => $row->entity_uuid, 'status' => 'applied']],
                 'summary' => ['applied' => 1],
             ]),
-            '*v1/sync/context' => Http::response(['company' => null]),
-            '*v1/sync/pull' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
-            '*v1/sync/ack' => Http::response(['ok' => true]),
-            '*v1/sync/conflicts' => Http::response(['pending' => 0]),
+            '*v1/sync/context*' => Http::response(['company' => null]),
+            '*v1/sync/pull*' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
+            '*v1/sync/ack*' => Http::response(['ok' => true]),
+            '*v1/sync/conflicts*' => Http::response(['pending' => 0]),
         ]);
 
         $summary = SyncRunner::make()->run(['reason' => 'test']);
@@ -129,18 +129,18 @@ class SyncRunnerTest extends OfflineTestCase
         $row = $this->queueChange();
 
         Http::fake([
-            '*v1/sync/status' => Http::response(['server_seq' => 1, 'conflicts_pending' => 0]),
-            '*v1/sync/heartbeat' => Http::response(['ok' => true]),
+            '*v1/sync/status*' => Http::response(['server_seq' => 1, 'conflicts_pending' => 0]),
+            '*v1/sync/heartbeat*' => Http::response(['ok' => true]),
             // Central already has this exact change (a lost response retried).
-            '*v1/sync/push' => Http::response([
+            '*v1/sync/push*' => Http::response([
                 'batch_uuid' => 'b2',
                 'results' => [['change_uuid' => $row->change_uuid, 'entity_type' => 'customer', 'uuid' => $row->entity_uuid, 'status' => 'duplicate', 'message' => 'Replayed.']],
                 'summary' => ['duplicates' => 1],
             ]),
-            '*v1/sync/context' => Http::response([]),
-            '*v1/sync/pull' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
-            '*v1/sync/ack' => Http::response(['ok' => true]),
-            '*v1/sync/conflicts' => Http::response(['pending' => 0]),
+            '*v1/sync/context*' => Http::response([]),
+            '*v1/sync/pull*' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
+            '*v1/sync/ack*' => Http::response(['ok' => true]),
+            '*v1/sync/conflicts*' => Http::response(['pending' => 0]),
         ]);
 
         $summary = SyncRunner::make()->run(['reason' => 'test']);
@@ -156,9 +156,9 @@ class SyncRunnerTest extends OfflineTestCase
         $ugly = $this->queueChange();
 
         Http::fake([
-            '*v1/sync/status' => Http::response(['server_seq' => 1, 'conflicts_pending' => 0]),
-            '*v1/sync/heartbeat' => Http::response(['ok' => true]),
-            '*v1/sync/push' => Http::response([
+            '*v1/sync/status*' => Http::response(['server_seq' => 1, 'conflicts_pending' => 0]),
+            '*v1/sync/heartbeat*' => Http::response(['ok' => true]),
+            '*v1/sync/push*' => Http::response([
                 'batch_uuid' => 'b3',
                 'results' => [
                     ['change_uuid' => $good->change_uuid, 'entity_type' => 'customer', 'uuid' => $good->entity_uuid, 'status' => 'applied'],
@@ -167,10 +167,10 @@ class SyncRunnerTest extends OfflineTestCase
                 ],
                 'summary' => [],
             ]),
-            '*v1/sync/context' => Http::response([]),
-            '*v1/sync/pull' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
-            '*v1/sync/ack' => Http::response(['ok' => true]),
-            '*v1/sync/conflicts' => Http::response(['pending' => 1]),
+            '*v1/sync/context*' => Http::response([]),
+            '*v1/sync/pull*' => Http::response(['data' => [], 'deleted' => [], 'next_cursor' => 0, 'has_more' => false]),
+            '*v1/sync/ack*' => Http::response(['ok' => true]),
+            '*v1/sync/conflicts*' => Http::response(['pending' => 1]),
         ]);
 
         $summary = SyncRunner::make()->run(['reason' => 'test']);
