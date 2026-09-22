@@ -87,25 +87,21 @@ migrations, missing tables or columns, the storage link, product photos with no 
 behind them, whether GD is present, and whether the php.ini upload limits are big
 enough — each with the command that fixes it. It is step 6 of `UPDATE.bat`.
 
-## Offline till (`.exe` for the shop floor)
+## Offline Mode (`.exe` for the shop floor)
 
-The same system has a second deployment face: a **Windows till that keeps
-selling with the internet off** — local SQLite + outbox, real offline
-transactions, idempotent sync to this same Laravel server, and a standalone
-`SoftCora-POS-Setup.exe` installer (no WAMP/PHP/Node required on the till PC).
-The newest installer always lives at the permanent link (needs access to this
-repository on GitHub):
+The same application runs **offline on a Windows shop PC**: the same Laravel
+backend (`OFFLINE_MODE=true`) with its own local SQLite database, the same
+Quasar dashboard, and bidirectional sync with Central (outbox + idempotent
+push, cursor pull, conflict center). `Afghan-China-Offline-Setup.exe` needs no
+WAMP/PHP/Node on the till PC — the installer carries its own runtime.
 
-**https://github.com/softcorat-bot/afghan-china/releases/download/latest/Afghan-China-Setup.exe**
-
-The server's fleet admin lives at **System → POS Devices / Synchronization /
-Sync Conflicts** in this web app. Start here:
-
-- [`offline/README.md`](offline/README.md) — the till itself (run, setup, sync, tests: `npm test` → 18/18)
-- [`docs/OFFLINE_ARCHITECTURE.md`](docs/OFFLINE_ARCHITECTURE.md) — how the two surfaces fit together
-- [`docs/SYNC_ENGINE.md`](docs/SYNC_ENGINE.md) — the server-side sync engine
-- [`docs/INSTALLATION.md`](docs/INSTALLATION.md) — installing/updating a till
-- Also: `OFFLINE_DATABASE.md` · `OFFLINE_SECURITY.md` · `OFFLINE_TESTING.md` · `TROUBLESHOOTING.md` · `RELEASE.md` · `OFFLINE_ARCHITECTURE_AUDIT.md`
+- [`docs/OFFLINE-MODE.md`](docs/OFFLINE-MODE.md) — install, register, seed, Sync Now, backups, test matrix
+- [`docs/OFFLINE-UNIFICATION-AUDIT.md`](docs/OFFLINE-UNIFICATION-AUDIT.md) — the technical audit behind the unification
+- [`installer/windows/WINDOWS-INSTALLER.md`](installer/windows/WINDOWS-INSTALLER.md) — building the Setup.exe
+- The fleet admin lives at **System → POS Devices / Synchronization /
+  Sync Conflicts**; the PC's own agent lives at **System → Sync Center**.
+- The first-generation standalone Node till is superseded but kept for
+  reference: [`offline/SUPERSEDED.md`](offline/SUPERSEDED.md).
 
 ## Documentation
 

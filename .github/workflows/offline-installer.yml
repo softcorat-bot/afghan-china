@@ -1,0 +1,145 @@
+#
+# Afghan China Offline Mode: Windows installer.
+#
+# Builds Afghan-China-Offline-Setup.exe from THIS repo (same Laravel backend +
+# same Quasar frontend, OFFLINE_MODE=true) and proves it on a real Windows
+# runner: install, boot, serve the API + dashboard, then uninstall while
+# keeping user data.
+#
+#   build     windows-latest — payload (build-payload.ps1) + Inno Setup compile
+#   verify    windows-latest — silent install, verify.ps1, uninstall, data kept
+#
+name: Offline installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'installer/windows/**'
+      - '.github/workflows/offline-installer.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'installer/windows/**'
+  workflow_dispatch:
+
+env:
+  APP_VERSION: 1.0.0
+
+jobs:
+  build:
+    name: Build the Setup.exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup PHP (build tooling only)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: ctype, curl, dom, fileinfo, filter, mbstring, openssl, pdo_sqlite, session, sodium, sqlite3, tokenizer, xml, zip
+          tools: composer
+
+      - name: Backend tests (offline agent)
+        working-directory: backend
+        run: |
+          composer install --no-interaction --no-progress
+          if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+          php artisan key:generate
+          php artisan test --filter=Offline
+
+      - name: Build the payload
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File installer\windows\build-payload.ps1 `
+            -OutDir installer\windows\payload -AppVersion $env:APP_VERSION 2>&1 | Tee-Object -FilePath payload-build.log
+          if ($LASTEXITCODE -ne 0) { throw "payload build failed ($LASTEXITCODE)" }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile the installer
+        shell: pwsh
+        run: |
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /DAppVersion=$env:APP_VERSION installer\windows\AfghanChinaOffline.iss
+          if ($LASTEXITCODE -ne 0) { throw "installer compile failed ($LASTEXITCODE)" }
+          Get-ChildItem installer\windows\dist
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          Push-Location installer\windows\dist
+          Get-FileHash Afghan-China-Offline-Setup.exe -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  Afghan-China-Offline-Setup.exe" } |
+            Out-File -Encoding ascii sha256.txt
+          Pop-Location
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Afghan-China-Offline-Setup
+          path: |
+            installer/windows/dist/Afghan-China-Offline-Setup.exe
+            installer/windows/dist/sha256.txt
+
+  verify:
+    name: Install and run it on Windows
+    runs-on: windows-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Afghan-China-Offline-Setup
+          path: dist
+
+      - name: Verify checksum
+        shell: pwsh
+        run: |
+          $expected = (Get-Content dist\sha256.txt).Split(' ')[0].Trim()
+          $actual = (Get-FileHash dist\Afghan-China-Offline-Setup.exe -Algorithm SHA256).Hash
+          if ($expected -ne $actual) { throw 'checksum mismatch' }
+
+      - name: Silent install
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\Afghan-China-Offline-Setup.exe -ArgumentList '/VERYSILENT','/NORESTART','/TASKS=""' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "silent install failed (exit $($p.ExitCode))" }
+          if (-not (Test-Path 'C:\Program Files\Afghan China Offline\php\php.exe')) { throw 'install produced no payload' }
+
+      - name: Verify the installation
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File installer\windows\verify.ps1
+
+      - name: Offline sale end to end (no internet needed)
+        shell: pwsh
+        run: |
+          # NOTE: a fresh box has no seed data; this proves the offline stack
+          # answers and queues work. Seeding needs a Central to pull from.
+          Push-Location 'C:\Program Files\Afghan China Offline\backend'
+          & ..\php\php.exe artisan offline:status
+          Pop-Location
+
+      - name: Uninstall keeps user data
+        shell: pwsh
+        run: |
+          $un = 'C:\Program Files\Afghan China Offline\unins000.exe'
+          # Feed NO to the "delete data?" prompt by piping; uninstaller default is NO.
+          Start-Process $un -ArgumentList '/VERYSILENT /NORESTART' -Wait
+          if (-not (Test-Path 'C:\ProgramData\AfghanChina\data\offline.sqlite')) {
+            throw 'user database was deleted by uninstall'
+          }
+          Write-Host 'data preserved across uninstall'

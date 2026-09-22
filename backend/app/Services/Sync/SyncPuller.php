@@ -73,6 +73,14 @@ class SyncPuller
             $rows = $rows->take($limit);
 
             foreach ($rows as $row) {
+                // An offline installation is the shop's own machine inside its own
+                // trust boundary: without the credential hashes, the same staff
+                // could not sign in to the same app while offline. This stream is
+                // device-authenticated and must always travel over TLS.
+                if ($table === 'users') {
+                    $row->makeVisible(['password', 'pin']);
+                }
+
                 $payload = $row->attributesToArray();
                 $maxSeq = max($maxSeq, (int) ($row->{$seqColumn} ?? $sinceSeq));
                 $rowsSent++;

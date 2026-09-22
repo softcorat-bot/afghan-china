@@ -1,5 +1,10 @@
 # https://pnpm.io/settings
 
+# pnpm 9 (used by the offline-installer CI) requires a non-empty `packages`
+# field whenever this file exists; newer pnpm tolerates settings-only files.
+packages:
+  - '.'
+
 # Disable the supply-chain minimumReleaseAge policy (blocks recently-published
 # packages) and the pre-run dependency status check. pnpm v11 reads these here.
 minimumReleaseAge: 0

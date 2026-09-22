@@ -374,6 +374,21 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('batches', [SyncLogController::class, 'batches'])->middleware('sync_admin:sync-log-list,sync-now');
             Route::post('prune', [SyncLogController::class, 'prune'])->middleware('sync_admin:manage-devices');
         });
+
+        // ── Sync Center: the local agent's API on an Offline installation ──
+        // Same guards as the fleet admin surface; the `offline.mode` middleware
+        // 404s every one of these routes on an Online installation.
+        Route::prefix('offline')->middleware('offline.mode')->group(function () {
+            Route::get('status', [\App\Http\Controllers\Offline\SyncCenterController::class, 'status'])->middleware('sync_admin:sync-log-list,sync-now');
+            Route::post('sync', [\App\Http\Controllers\Offline\SyncCenterController::class, 'sync'])->middleware('sync_admin:sync-now');
+            Route::post('register', [\App\Http\Controllers\Offline\SyncCenterController::class, 'register'])->middleware('sync_admin:manage-devices');
+            Route::post('retry', [\App\Http\Controllers\Offline\SyncCenterController::class, 'retry'])->middleware('sync_admin:sync-now');
+            Route::get('outbox', [\App\Http\Controllers\Offline\SyncCenterController::class, 'outbox'])->middleware('sync_admin:sync-log-list,sync-now');
+            Route::get('conflicts', [\App\Http\Controllers\Offline\SyncCenterController::class, 'conflicts'])->middleware('sync_admin:sync-conflict-list,resolve-sync-conflicts');
+            Route::get('backups', [\App\Http\Controllers\Offline\SyncCenterController::class, 'backups'])->middleware('sync_admin:manage-devices');
+            Route::post('backup', [\App\Http\Controllers\Offline\SyncCenterController::class, 'backup'])->middleware('sync_admin:manage-devices');
+            Route::post('restore', [\App\Http\Controllers\Offline\SyncCenterController::class, 'restore'])->middleware('sync_admin:manage-devices');
+        });
     });
 });
 
@@ -401,6 +416,7 @@ $offlineSyncRoutes = function (): void {
         Route::match(['get', 'post'], 'pull', [\App\Http\Controllers\Sync\SyncController::class, 'pull']);
         Route::post('ack', [\App\Http\Controllers\Sync\SyncController::class, 'ack']);
         Route::get('conflicts', [\App\Http\Controllers\Sync\SyncController::class, 'conflicts']);
+        Route::match(['get', 'post'], 'context', [\App\Http\Controllers\Sync\SyncController::class, 'context']);
         Route::post('token/rotate', [\App\Http\Controllers\Sync\DeviceSyncController::class, 'rotate']);
     });
 };

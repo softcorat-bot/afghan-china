@@ -14,3 +14,10 @@ use Illuminate\Support\Facades\Schedule;
 // `php artisan acsc:backup`.
 Schedule::command('acsc:backup')->dailyAt('01:00')->withoutOverlapping();
 
+// Offline Mode: automatic sync when the shop wants it. OFFLINE_AUTO_SYNC_MINUTES=0
+// (the default) means manual "Sync Now" only — automatic sync never sneaks on.
+if (config('offline.enabled') && (int) config('offline.auto_sync_minutes', 0) > 0) {
+    Schedule::command('offline:sync --reason=auto')->withoutOverlapping()
+        ->cron('*/'.(int) config('offline.auto_sync_minutes', 0).' * * * *');
+}
+
