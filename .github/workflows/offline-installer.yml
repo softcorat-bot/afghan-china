@@ -77,9 +77,16 @@ jobs:
             $raw = ''
             if (Test-Path payload-build.log) { $raw = (Get-Content payload-build.log -Raw) }
             if (-not $raw) { $raw = '(empty build log)' }
-            $tail = $raw.Substring($raw.Length - [Math]::Min(15000, $raw.Length))
-            $esc = $tail -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
-            Write-Host "::error title=payload-build-tail::$esc"
+            $total = [Math]::Min(10500, $raw.Length)
+            $window = $raw.Substring($raw.Length - $total)
+            for ($i = 0; $i -lt 3; $i++) {
+              $start = $i * 3500
+              if ($start -ge $window.Length) { break }
+              $len = [Math]::Min(3500, $window.Length - $start)
+              $part = $window.Substring($start, $len)
+              $esc = $part -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
+              Write-Host "::error title=payload-tail-$i::$esc"
+            }
             throw "payload build failed ($LASTEXITCODE)"
           }
 
