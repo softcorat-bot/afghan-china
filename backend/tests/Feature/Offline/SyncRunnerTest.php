@@ -6,9 +6,10 @@ use App\Models\Customer;
 use App\Models\OfflineMeta;
 use App\Models\OfflineOutbox;
 use App\Models\Product;
+use App\Services\Offline\CentralClient;
 use App\Services\Offline\OfflineSyncException;
+use App\Services\Offline\PullApplier;
 use App\Services\Offline\SyncRunner;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -187,10 +188,20 @@ class SyncRunnerTest extends OfflineTestCase
         $row = $this->queueChange();
         OfflineMeta::set('sync.cursor', 17);
 
-        Http::fake(fn () => throw new ConnectionException('network down'));
+        // A dead network surfaces as OfflineSyncException('central_unreachable')
+        // from the client; the runner must leave outbox + cursor untouched.
+        // (Thrown directly by a test double: raising through Http::fake
+        // closures kills the Windows PHP process instead of propagating.)
+        $client = new class extends CentralClient
+        {
+            public function status(int $timeoutSeconds): array
+            {
+                throw OfflineSyncException::connection(new \RuntimeException('network down'));
+            }
+        };
 
         try {
-            SyncRunner::make()->run(['reason' => 'test']);
+            (new SyncRunner($client, new PullApplier))->run(['reason' => 'test']);
             $this->fail('expected OfflineSyncException');
         } catch (OfflineSyncException $e) {
             $this->assertSame('central_unreachable', $e->code);

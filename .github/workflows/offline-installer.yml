@@ -51,55 +51,13 @@ jobs:
           extensions: ctype, curl, dom, fileinfo, filter, mbstring, openssl, pdo_sqlite, session, sodium, sqlite3, tokenizer, xml, zip
           tools: composer
 
-      - name: Install backend dependencies
-        working-directory: backend
-        run: composer install --no-interaction --no-progress
-
-      - name: Prepare backend env
-        working-directory: backend
-        run: |
-          if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-          php artisan key:generate
-
       - name: Backend tests (offline agent)
         working-directory: backend
         run: |
-          php vendor/bin/phpunit --filter=Offline --debug 2>&1 | Tee-Object -FilePath offline-tests.log
-          if ($LASTEXITCODE -ne 0) {
-            $raw = ''
-            if (Test-Path offline-tests.log) { $raw = (Get-Content offline-tests.log -Raw) }
-            if (-not $raw) { $raw = '(empty test log)' }
-            $emit = {
-              param($title, $text)
-              $esc = $text -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
-              Write-Host "::error title=$title::$esc"
-            }
-            & $emit 'offline-tests-head' $raw.Substring(0, [Math]::Min(3000, $raw.Length))
-            if ($raw.Length -gt 3000) {
-              & $emit 'offline-tests-tail' $raw.Substring($raw.Length - [Math]::Min(3000, $raw.Length - 3000))
-            }
-            throw "offline tests failed ($LASTEXITCODE)"
-          }
-
-      - name: Upload test log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: offline-tests-log
-          path: backend/offline-tests.log
-          if-no-files-found: warn
-
-      - name: Surface shutdown probe
-        if: always()
-        working-directory: backend
-        run: |
-          if (Test-Path offline-shutdown-probe.txt) {
-            $line = (Get-Content offline-shutdown-probe.txt -Raw).Trim()
-            $esc = $line -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
-            Write-Host "::error title=offline-probe::$esc"
-          } else {
-            Write-Host '::error title=offline-probe::(no probe file - shutdown handlers never ran: segfault or SIGKILL)'
-          }
+          composer install --no-interaction --no-progress
+          if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+          php artisan key:generate
+          php artisan test --filter=Offline
 
       - name: Build the payload
         shell: pwsh

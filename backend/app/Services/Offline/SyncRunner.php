@@ -52,9 +52,7 @@ class SyncRunner
         $doPull = (bool) ($options['pull'] ?? true);
         $reason = (string) ($options['reason'] ?? 'manual');
         $started = now();
-        fwrite(STDERR, "\nOFFLINE-MARK: run entry\n");
         $log = Log::channel('offline');
-        fwrite(STDERR, "\nOFFLINE-MARK: log channel ok\n");
 
         $summary = [
             'ok' => false,
@@ -70,26 +68,20 @@ class SyncRunner
 
         try {
             // 1–2. Reachability + heartbeat.
-            fwrite(STDERR, "\nOFFLINE-MARK: before status\n");
             $status = $this->central->status((int) config('offline.connect_timeout', 8));
-            fwrite(STDERR, "\nOFFLINE-MARK: after status\n");
             $summary['server_seq'] = $status['server_seq'] ?? null;
             $summary['central_conflicts_pending'] = (int) ($status['conflicts_pending'] ?? 0);
 
             $counts = $this->counts();
             $this->central->heartbeat(['pending' => $counts['pending'], 'failed' => $counts['failed']]);
-            fwrite(STDERR, "\nOFFLINE-MARK: after heartbeat\n");
 
             // 3. Push.
             if ($doPush) {
-                fwrite(STDERR, "\nOFFLINE-MARK: before pushAll\n");
                 $summary['push'] = array_merge($summary['push'], $this->pushAll($log));
-                fwrite(STDERR, "\nOFFLINE-MARK: after pushAll\n");
             }
 
             // 4. Context (company/RBAC) refresh.
             if ($doPull) {
-                fwrite(STDERR, "\nOFFLINE-MARK: before context\n");
                 try {
                     $this->applier->applyContext($this->central->context());
                 } catch (OfflineSyncException $e) {
@@ -97,12 +89,9 @@ class SyncRunner
                     // was, the sequenced pull below still runs.
                     $log->warning('context refresh skipped: '.$e->getMessage());
                 }
-                fwrite(STDERR, "\nOFFLINE-MARK: after context\n");
 
                 // 5–6. Pull loop + ack.
-                fwrite(STDERR, "\nOFFLINE-MARK: before pullAll\n");
                 $summary['pull'] = array_merge($summary['pull'], $this->pullAll($options['tables'] ?? [], $log));
-                fwrite(STDERR, "\nOFFLINE-MARK: after pullAll\n");
             }
 
             try {
@@ -112,7 +101,6 @@ class SyncRunner
                 // Non-critical; the counts above already tell the story.
             }
 
-            fwrite(STDERR, "\nOFFLINE-MARK: after conflicts\n");
             $failed = $summary['push']['rejected'] + $summary['push']['errors'] + $summary['pull']['failed'];
             $summary['ok'] = true;
             $summary['finished_at'] = now()->toIso8601String();
@@ -127,16 +115,12 @@ class SyncRunner
             }
 
             $log->info('sync completed', $summary);
-            fwrite(STDERR, "\nOFFLINE-MARK: before return\n");
 
             return $summary;
         } catch (OfflineSyncException $e) {
-            fwrite(STDERR, "\nOFFLINE-MARK: run catch entry\n");
             OfflineMeta::set('sync.last_run_at', now()->toIso8601String());
             OfflineMeta::set('sync.last_error', $e->getMessage());
-            fwrite(STDERR, "\nOFFLINE-MARK: run catch after meta\n");
             $log->warning('sync failed: '.$e->getMessage(), ['code' => $e->code]);
-            fwrite(STDERR, "\nOFFLINE-MARK: run catch before rethrow\n");
 
             throw $e;
         }
@@ -309,31 +293,23 @@ class SyncRunner
         do {
             $pages++;
 
-            fwrite(STDERR, "\nOFFLINE-MARK: pullAll before pull\n");
             $response = $this->central->pull($cursor, $tables);
-            fwrite(STDERR, "\nOFFLINE-MARK: pullAll after pull\n");
 
-            fwrite(STDERR, "\nOFFLINE-MARK: pullAll before applyPage\n");
             $page = $this->applier->applyPage(
                 $response['data'] ?? [],
                 $response['deleted'] ?? [],
                 $cursor
             );
-            fwrite(STDERR, "\nOFFLINE-MARK: pullAll after applyPage\n");
 
             $result['applied'] += count($page['applied']);
             $result['failed'] += count($page['failed']);
             $result['conflicts'] += count($page['conflicts']);
 
             $cursor = (int) $page['cursor'];
-            fwrite(STDERR, "\nOFFLINE-MARK: pullAll before cursor set\n");
             OfflineMeta::set('sync.cursor', $cursor);
-            fwrite(STDERR, "\nOFFLINE-MARK: pullAll after cursor set\n");
 
             try {
-                fwrite(STDERR, "\nOFFLINE-MARK: pullAll before ack\n");
                 $this->central->ack($cursor, $page['applied'], $page['failed']);
-                fwrite(STDERR, "\nOFFLINE-MARK: pullAll after ack\n");
             } catch (OfflineSyncException $e) {
                 $log->warning('ack failed (cursor kept locally): '.$e->getMessage());
             }
