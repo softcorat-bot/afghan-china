@@ -94,6 +94,7 @@ sqlite3.defensive = 1
 
 # ── 2. Backend (composer, no dev) ────────────────────────────────────────────
 $BackendDst = Join-Path $OutDir 'backend'
+New-Item -ItemType Directory -Force $BackendDst | Out-Null
 Write-Host '==> copying backend'
 $exclude = @('.git', 'node_modules', '.env', '.env.*', 'storage\logs\*', 'tests')
 Copy-Item -Path (Join-Path $BackendSrc '*') -Destination $BackendDst -Recurse -Force -Exclude $exclude
