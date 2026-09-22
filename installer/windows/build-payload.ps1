@@ -28,7 +28,7 @@ function Require-Command($name, $hint) {
   }
 }
 
-Require-Command 'php' 'Install PHP 8.3+ CLI on the BUILD machine (the payload ships its own runtime).'
+Require-Command 'php' 'Install PHP 8.4+ CLI on the BUILD machine (the payload ships its own runtime).'
 Require-Command 'composer' 'Install Composer on the build machine.'
 Require-Command 'node' 'Install Node.js on the build machine.'
 Require-Command 'pnpm' 'Run: npm install -g pnpm'

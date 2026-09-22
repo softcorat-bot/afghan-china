@@ -25,7 +25,7 @@ ISCC.exe installer\windows\AfghanChinaOffline.iss
 # -> installer\windows\dist\Afghan-China-Offline-Setup.exe
 ```
 
-The PHP runtime is pinned (`-PhpVersion`, default `8.3.14`, overridable via
+The PHP runtime is pinned (`-PhpVersion`, default `8.4.25`, overridable via
 `AFGHANCHINA_PHP_VERSION`) and the builder refuses to continue if the downloaded
 runtime reports a different version. The payload is linted (ASCII-only scripts)
 and its own `pdo_sqlite` is smoke-tested before it can ship.

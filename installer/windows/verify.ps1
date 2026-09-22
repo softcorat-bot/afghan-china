@@ -32,7 +32,7 @@ Check 'payload present' {
 
 Check 'bundled php runs with sqlite' {
   $v = (& $php -v | Select-Object -First 1)
-  if ($v -notmatch 'PHP 8\.3') { throw "unexpected runtime: $v" }
+  if ($v -notmatch 'PHP 8\.4') { throw "unexpected runtime: $v" }
   $sqlite = (& $php -r "echo (int) extension_loaded('pdo_sqlite"), PHP_EOL;")
   if ($sqlite.Trim() -ne '1') { throw 'pdo_sqlite not loaded' }
 }

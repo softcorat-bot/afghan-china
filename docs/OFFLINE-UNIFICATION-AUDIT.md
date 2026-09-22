@@ -241,7 +241,7 @@ id · change_uuid (unique, = idempotency key) · entity_type · entity_uuid
 - Target: `Afghan-China-Offline-Setup.exe` built with **Inno Setup** on a Windows
   CI runner (`.github/workflows/offline-installer.yml`), compiled from
   `installer/windows/AfghanChinaOffline.iss`.
-- Payload (assembled by `installer/windows/build-payload.ps1`): pinned **PHP 8.3
+- Payload (assembled by `installer/windows/build-payload.ps1`): pinned **PHP 8.4
   embed** zip + required extensions, Composer-installed backend (`--no-dev`),
   Quasar production build served from `public/app` with `config.js` pointing at the
   local API, `.env.offline` template, launcher (`AfghanChina.cmd`), verification
