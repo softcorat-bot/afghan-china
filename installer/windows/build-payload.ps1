@@ -145,7 +145,7 @@ $lintErrors = @()
 # The php/ runtime ships third-party docs (news.txt, readme-redist-bins.txt) that
 # legitimately contain non-ASCII bytes; only our own files must be ASCII-clean.
 Get-ChildItem -Path $OutDir -Include *.cmd, *.iss, *.txt, *.template -Recurse |
-  Where-Object { $_.FullName -notlike "$PhpDir*" } | ForEach-Object {
+  Where-Object { $_.FullName -notlike '*\php\*' } | ForEach-Object {
   $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
   if ($bytes | Where-Object { $_ -gt 127 }) { $lintErrors += "$($_.Name): non-ASCII byte found" }
 }
