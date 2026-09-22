@@ -80,7 +80,10 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  DataDir, DbFile, EnvFile, Template, Env, Central: String;
+  DataDir, DbFile, EnvFile, Env, Central: String;
+  { LoadStringFromFile's var parameter is AnsiString under Unicode Inno Setup;
+    passing a (Unicode) String is a compile-time type mismatch. }
+  Template: AnsiString;
   ResultCode: Integer;
 begin
   DataDir := ExpandConstant('{commonappdata}\AfghanChina\data');
