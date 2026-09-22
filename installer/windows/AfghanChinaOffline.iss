@@ -22,6 +22,7 @@ OutputBaseFilename=Afghan-China-Offline-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 WizardStyle=modern
 DisableProgramGroupPage=yes
