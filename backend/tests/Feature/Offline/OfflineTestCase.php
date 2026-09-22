@@ -20,6 +20,19 @@ abstract class OfflineTestCase extends TestCase
     {
         parent::setUp();
 
+        // TEMPORARY CI DEBUG PROBE: PHPUnit only reports "Premature end of PHP
+        // process" when the runner dies mid-test. This prints the real fatal
+        // (or proves a clean exit/die) via the shutdown handler. Remove once green.
+        if (! defined('OFFLINE_SHUTDOWN_PROBE')) {
+            define('OFFLINE_SHUTDOWN_PROBE', true);
+            register_shutdown_function(function () {
+                $e = error_get_last();
+                $peak = (int) (memory_get_peak_usage(true) / 1024 / 1024);
+                $limit = ini_get('memory_limit');
+                fwrite(STDERR, "\nOFFLINE-SHUTDOWN-PROBE peak={$peak}M limit={$limit} error=".($e ? ($e['message'].' @ '.$e['file'].':'.$e['line']) : '(none - process ended via exit/die)')."\n");
+            });
+        }
+
         $this->company = Company::create(['name_en' => 'Offline Test Co']);
     }
 
