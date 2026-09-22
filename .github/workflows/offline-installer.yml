@@ -72,7 +72,16 @@ jobs:
         shell: pwsh
         run: |
           powershell -ExecutionPolicy Bypass -File installer\windows\build-payload.ps1 `
-            -OutDir installer\windows\payload -AppVersion $env:APP_VERSION
+            -OutDir installer\windows\payload -AppVersion $env:APP_VERSION 2>&1 | Tee-Object -FilePath payload-build.log
+          if ($LASTEXITCODE -ne 0) {
+            $raw = ''
+            if (Test-Path payload-build.log) { $raw = (Get-Content payload-build.log -Raw) }
+            if (-not $raw) { $raw = '(empty build log)' }
+            $tail = $raw.Substring($raw.Length - [Math]::Min(5000, $raw.Length))
+            $esc = $tail -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
+            Write-Host "::error title=payload-build-tail::$esc"
+            throw "payload build failed ($LASTEXITCODE)"
+          }
 
       - name: Install Inno Setup
         shell: pwsh
