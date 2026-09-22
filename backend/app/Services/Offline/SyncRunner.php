@@ -306,23 +306,31 @@ class SyncRunner
         do {
             $pages++;
 
+            fwrite(STDERR, "\nOFFLINE-MARK: pullAll before pull\n");
             $response = $this->central->pull($cursor, $tables);
+            fwrite(STDERR, "\nOFFLINE-MARK: pullAll after pull\n");
 
+            fwrite(STDERR, "\nOFFLINE-MARK: pullAll before applyPage\n");
             $page = $this->applier->applyPage(
                 $response['data'] ?? [],
                 $response['deleted'] ?? [],
                 $cursor
             );
+            fwrite(STDERR, "\nOFFLINE-MARK: pullAll after applyPage\n");
 
             $result['applied'] += count($page['applied']);
             $result['failed'] += count($page['failed']);
             $result['conflicts'] += count($page['conflicts']);
 
             $cursor = (int) $page['cursor'];
+            fwrite(STDERR, "\nOFFLINE-MARK: pullAll before cursor set\n");
             OfflineMeta::set('sync.cursor', $cursor);
+            fwrite(STDERR, "\nOFFLINE-MARK: pullAll after cursor set\n");
 
             try {
+                fwrite(STDERR, "\nOFFLINE-MARK: pullAll before ack\n");
                 $this->central->ack($cursor, $page['applied'], $page['failed']);
+                fwrite(STDERR, "\nOFFLINE-MARK: pullAll after ack\n");
             } catch (OfflineSyncException $e) {
                 $log->warning('ack failed (cursor kept locally): '.$e->getMessage());
             }
