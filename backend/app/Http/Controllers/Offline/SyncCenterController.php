@@ -86,9 +86,11 @@ class SyncCenterController extends Controller
         set_time_limit(0);
 
         try {
+            fwrite(STDERR, "\nOFFLINE-MARK: controller before run\n");
             $summary = SyncRunner::make()->run([
                 'reason' => 'sync-center:'.($request->user()?->email ?? 'cli'),
             ]);
+            fwrite(STDERR, "\nOFFLINE-MARK: controller after run\n");
         } catch (OfflineSyncException $e) {
             return response()->json([
                 'ok' => false,
