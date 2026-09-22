@@ -89,6 +89,18 @@ jobs:
           path: backend/offline-tests.log
           if-no-files-found: warn
 
+      - name: Surface shutdown probe
+        if: always()
+        working-directory: backend
+        run: |
+          if (Test-Path offline-shutdown-probe.txt) {
+            $line = (Get-Content offline-shutdown-probe.txt -Raw).Trim()
+            $esc = $line -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
+            Write-Host "::error title=offline-probe::$esc"
+          } else {
+            Write-Host '::error title=offline-probe::(no probe file - shutdown handlers never ran: segfault or SIGKILL)'
+          }
+
       - name: Build the payload
         shell: pwsh
         run: |

@@ -29,7 +29,9 @@ abstract class OfflineTestCase extends TestCase
                 $e = error_get_last();
                 $peak = (int) (memory_get_peak_usage(true) / 1024 / 1024);
                 $limit = ini_get('memory_limit');
-                fwrite(STDERR, "\nOFFLINE-SHUTDOWN-PROBE peak={$peak}M limit={$limit} error=".($e ? ($e['message'].' @ '.$e['file'].':'.$e['line']) : '(none - process ended via exit/die)')."\n");
+                $line = 'OFFLINE-SHUTDOWN-PROBE peak='.$peak.'M limit='.$limit.' error='.($e ? ($e['message'].' @ '.$e['file'].':'.$e['line']) : '(none - process ended via exit/die, or segfault killed handlers)');
+                @file_put_contents(getcwd().'/offline-shutdown-probe.txt', $line."\n");
+                fwrite(STDERR, "\n".$line."\n");
             });
         }
 
