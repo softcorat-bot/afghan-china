@@ -62,6 +62,13 @@ pnpm install
 VITE_API_URL=http://127.0.0.1:8000 quasar dev   # http://localhost:9000
 ```
 
+If sign-in says **"Cannot reach the server"**, the browser never got an answer from
+the API: check that `php artisan serve` is running and that the address in the
+message is right. The API accepts the dashboard from `localhost`/`127.0.0.1` on any
+port (so Quasar falling back to `:9001` is fine) and from LAN addresses; for any
+other address add it to `FRONTEND_URL` in `backend/.env` and run
+`php artisan config:clear`.
+
 **Updating an existing machine:** run **`UPDATE.bat`** in the project root — it pulls,
 migrates, reseeds permissions/images and clears caches in one click.
 
@@ -110,5 +117,5 @@ WAMP/PHP/Node on the till PC — the installer carries its own runtime.
 - [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md) — repo roles and provenance
 - `MASTER_PROMPT.md` — the owner's original rulebook
 
-Development branch: `claude/afghan-china-v2-setup-u3v99o`.
+Development branch: `main`.
 "# afghan-china" 

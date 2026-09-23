@@ -156,9 +156,11 @@ async function submit () {
     granted.value = true
     setTimeout(() => router.push('/pos'), 550)
   } catch (e) {
-    const msg = e?.response?.status === 429
-      ? 'Too many attempts — wait a moment'
-      : (e?.response?.data?.errors?.pin?.[0] || 'Wrong PIN')
+    const msg = !e?.response
+      ? 'Cannot reach the server — is the backend running?'
+      : e.response.status === 429
+        ? 'Too many attempts — wait a moment'
+        : (e.response.data?.errors?.pin?.[0] || e.response.data?.message || 'Wrong PIN')
     error.value = msg
     pin.value = ''
     shake.value = true

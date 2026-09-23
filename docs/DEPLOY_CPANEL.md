@@ -246,7 +246,7 @@ works fine from a subfolder if you prefer `example.com/pos/`.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Browser console: `blocked by CORS policy` | `FRONTEND_URL` in `.env` doesn't exactly match the SPA's address | Match it including `https://` and any `www.`, then `php artisan optimize:clear` |
+| Browser console: `blocked by CORS policy` | `FRONTEND_URL` in `.env` doesn't exactly match the SPA's address (login shows *Cannot reach the server*) | Match it including `https://` and any `www.` — comma-separate several, e.g. `https://shop.example.com,https://www.shop.example.com` — then `php artisan optimize:clear` |
 | Every API call fails, but the site loads | `config.js` points at the wrong address, or at `http://` while the page is `https://` | Fix `public_html/config.js` |
 | `500` on every page, blank white screen | Missing `APP_KEY`, or `storage/` and `bootstrap/cache/` are not writable | `php artisan key:generate`; set both to `755` |
 | `SQLSTATE[HY000] [1045] Access denied` | The database user was never added to the database, or you used the un-prefixed name | cPanel → MySQL® Databases → **Add User To Database**, ALL PRIVILEGES |

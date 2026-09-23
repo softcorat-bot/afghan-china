@@ -47,7 +47,8 @@ class OfflineSeedCommand extends Command
 
         try {
             $this->info('Fetching company + roles context…');
-            $applier->applyContext($central->context());
+            $context = $central->context();
+            $applier->applyContext($context);
 
             $cursor = 0;
             $total = 0;
@@ -67,6 +68,9 @@ class OfflineSeedCommand extends Command
                     $this->warn('ack failed (progress kept locally): '.$e->getMessage());
                 }
             } while ($response['has_more'] ?? false);
+
+            // Second pass now that the users exist: company membership rows.
+            $applier->applyContext($context);
         } catch (OfflineSyncException $e) {
             $this->error($e->getMessage());
 

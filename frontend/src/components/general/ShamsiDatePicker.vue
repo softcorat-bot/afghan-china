@@ -109,7 +109,7 @@ const calendarDays = computed(() => {
   const firstGreg = shamsiToGregorian(shamsiYear.value, shamsiMonth.value, 1)
   const firstDate = new Date(firstGreg)
   const startDay = (firstDate.getDay() + 1) % 7
-  const days = new Array(startDay).fill(null)
+  const days = Array.from({ length: startDay }, () => null)
   for (let d = 1; d <= monthDays; d++) days.push(d)
   return days
 })

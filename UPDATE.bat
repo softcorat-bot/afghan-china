@@ -9,8 +9,15 @@ cd /d "%~dp0"
 
 echo.
 echo [1/6] Pulling latest code...
-git fetch origin
-git checkout -f -B claude/afghan-china-v2-setup-u3v99o origin/claude/afghan-china-v2-setup-u3v99o
+REM The old development branch (claude/afghan-china-v2-setup-u3v99o) no longer
+REM exists on GitHub; every change is merged into main, so update from main.
+git fetch origin main
+if errorlevel 1 (
+  echo  ^> Could not reach GitHub. Check the internet connection and run UPDATE.bat again.
+  pause
+  exit /b 1
+)
+git checkout -f -B main origin/main
 
 echo.
 echo [2/6] Migrating the database...

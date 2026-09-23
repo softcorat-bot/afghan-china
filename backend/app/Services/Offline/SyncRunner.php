@@ -82,8 +82,10 @@ class SyncRunner
 
             // 4. Context (company/RBAC) refresh.
             if ($doPull) {
+                $context = null;
                 try {
-                    $this->applier->applyContext($this->central->context());
+                    $context = $this->central->context();
+                    $this->applier->applyContext($context);
                 } catch (OfflineSyncException $e) {
                     // An older Central has no context endpoint: seed stays as it
                     // was, the sequenced pull below still runs.
@@ -92,6 +94,11 @@ class SyncRunner
 
                 // 5–6. Pull loop + ack.
                 $summary['pull'] = array_merge($summary['pull'], $this->pullAll($options['tables'] ?? [], $log));
+
+                // Users pulled just now can be linked to the company as well.
+                if (is_array($context)) {
+                    $this->applier->applyContext($context);
+                }
             }
 
             try {

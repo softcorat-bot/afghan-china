@@ -17,7 +17,7 @@ export function useCurrency () {
       const { data } = await api.get('/exchange-rates/current')
       base.value = data?.base || 'AFN'
       rates.value = data?.rates || {}
-    } catch (_) { loaded = false }
+    } catch { loaded = false }
   }
 
   function rateFor (currency) {

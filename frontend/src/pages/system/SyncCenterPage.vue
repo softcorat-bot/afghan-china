@@ -92,7 +92,7 @@
             <q-icon name="download" color="blue" /> {{ $t('Pull') }}:
             {{ summary.pull.applied }} {{ $t('AppliedCount') }},
             {{ summary.pull.failed }} {{ $t('Failed') }},
-            {{ summary.pull.conflicts }} {{ $t('Conflict', {}, 2) || 'conflicts' }}
+            {{ summary.pull.conflicts }} {{ $t('ConflictsCount') }}
           </div>
           <div class="text-grey-7">{{ $t('Cursor') }} {{ summary.cursor_before }} → {{ summary.cursor_after }}</div>
         </div>
@@ -372,7 +372,7 @@ async function backupNow() {
 function restoreBackup(row) {
   $q.dialog({
     title: t('Restore'),
-    message: t('RestoreConfirm'),
+    message: t('OfflineRestoreConfirm'),
     cancel: true,
     persistent: true,
   }).onOk(async () => {

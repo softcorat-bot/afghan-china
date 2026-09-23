@@ -94,8 +94,18 @@ class PullApplier
                     }
 
                     if ($table === 'company_user') {
+                        // Only link users this till already has. On a brand-new
+                        // install the context arrives *before* the first pull,
+                        // so the users are not here yet and the foreign key
+                        // would abort the whole seed; the caller applies the
+                        // context once more after the pull to fill these in.
+                        $known = DB::table('users')->whereIn('id', array_column($rows, 'user_id'))->pluck('id')->all();
+                        $rows = array_values(array_filter($rows, fn ($r) => in_array($r['user_id'] ?? null, $known)));
+
                         DB::table($table)->where('company_id', $identity['company_id'] ?? -1)->delete();
-                        DB::table($table)->insert($rows);
+                        if ($rows !== []) {
+                            DB::table($table)->insert($rows);
+                        }
                     } else {
                         DB::table($table)->upsert($rows, ['id']);
                     }

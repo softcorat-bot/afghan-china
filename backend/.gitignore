@@ -35,3 +35,6 @@ rr
 # User-uploaded runtime content (product photos, etc.)
 /storage/app/public/products
 /public/storage
+
+# Offline till identity (device token — secret, per machine)
+/storage/app/offline

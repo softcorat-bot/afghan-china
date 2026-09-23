@@ -91,6 +91,7 @@ import { ref, reactive, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from '@/stores/auth'
+import { apiHost } from '@/boot/axios'
 import BrandMark from '@/components/general/BrandMark.vue'
 
 const { proxy } = getCurrentInstance()
@@ -114,6 +115,18 @@ function fillDemo() {
   form.password = 'password'
 }
 
+// Explain *why* sign-in failed. No response at all means the browser never
+// reached the API — the backend is down, the API address is wrong, or the
+// API refused this page's origin (CORS) — so say that instead of a bare
+// "Login failed" that leaves the user guessing.
+function loginError (e) {
+  const res = e?.response
+  if (!res) return proxy.$t('CannotReachServer').replace('{url}', apiHost)
+  const errors = res.data?.errors
+  const first = errors && Object.values(errors).flat()[0]
+  return first || res.data?.message || proxy.$t('LoginFailed')
+}
+
 async function onSubmit() {
   loading.value = true
   try {
@@ -121,7 +134,7 @@ async function onSubmit() {
     $q.notify({ type: 'positive', position: 'bottom', icon: 'waving_hand', message: 'Welcome back!' })
     router.push({ name: 'dashboard' })
   } catch (e) {
-    $q.notify({ type: 'negative', message: e?.response?.data?.message || 'Login failed' })
+    $q.notify({ type: 'negative', message: loginError(e), timeout: 7000 })
   } finally {
     loading.value = false
   }

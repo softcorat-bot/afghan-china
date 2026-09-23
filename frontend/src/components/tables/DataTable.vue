@@ -224,7 +224,7 @@ function readPrefs () {
 }
 function writePrefs (patch) {
   try {
-    localStorage.setItem(prefsKey.value, JSON.stringify({ ...(readPrefs() || {}), ...patch }))
+    localStorage.setItem(prefsKey.value, JSON.stringify({ ...readPrefs(), ...patch }))
   } catch { /* private mode / quota — the table still works, just forgets */ }
 }
 

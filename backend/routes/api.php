@@ -149,9 +149,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('product-categories/{category}', [\App\Http\Controllers\Catalog\ProductCategoryController::class, 'destroy']);
 
         // ── Point of Sale (the register) ────────────────────────────────
-        Route::get('pos/catalog', [\App\Http\Controllers\Pos\PosController::class, 'catalog']);
-        Route::get('pos/scan', [\App\Http\Controllers\Pos\PosController::class, 'scan']);
-        Route::post('pos/checkout', [\App\Http\Controllers\Pos\PosController::class, 'checkout']);
+        Route::get('pos/catalog', [\App\Http\Controllers\POS\PosController::class, 'catalog']);
+        Route::get('pos/scan', [\App\Http\Controllers\POS\PosController::class, 'scan']);
+        Route::post('pos/checkout', [\App\Http\Controllers\POS\PosController::class, 'checkout']);
 
         // ── Order Queue Management ──
         Route::get('pos/queue', [\App\Http\Controllers\POS\OrderQueueController::class, 'index']);
@@ -164,13 +164,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('bills/{sale}/data', [\App\Http\Controllers\POS\BillPrintController::class, 'data']);
 
         // ── Cashier shifts / cash drawer ────────────────────────────────
-        Route::get('shifts/current', [\App\Http\Controllers\Pos\ShiftController::class, 'current']);
-        Route::get('shifts', [\App\Http\Controllers\Pos\ShiftController::class, 'index']);
-        Route::get('shifts/{shift}', [\App\Http\Controllers\Pos\ShiftController::class, 'show']);
-        Route::get('shifts/{shift}/xreport', [\App\Http\Controllers\Pos\ShiftController::class, 'xreport']);
-        Route::post('shifts/open', [\App\Http\Controllers\Pos\ShiftController::class, 'open']);
-        Route::post('shifts/{shift}/movement', [\App\Http\Controllers\Pos\ShiftController::class, 'movement']);
-        Route::post('shifts/{shift}/close', [\App\Http\Controllers\Pos\ShiftController::class, 'close']);
+        Route::get('shifts/current', [\App\Http\Controllers\POS\ShiftController::class, 'current']);
+        Route::get('shifts', [\App\Http\Controllers\POS\ShiftController::class, 'index']);
+        Route::get('shifts/{shift}', [\App\Http\Controllers\POS\ShiftController::class, 'show']);
+        Route::get('shifts/{shift}/xreport', [\App\Http\Controllers\POS\ShiftController::class, 'xreport']);
+        Route::post('shifts/open', [\App\Http\Controllers\POS\ShiftController::class, 'open']);
+        Route::post('shifts/{shift}/movement', [\App\Http\Controllers\POS\ShiftController::class, 'movement']);
+        Route::post('shifts/{shift}/close', [\App\Http\Controllers\POS\ShiftController::class, 'close']);
 
         // ── Purchasing: Suppliers & Goods Receiving ─────────────────────
         Route::get('suppliers/{supplier}/dashboard', [\App\Http\Controllers\Purchasing\SupplierController::class, 'dashboard']);
@@ -338,13 +338,9 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('alerts/{alert}/acknowledge', [\App\Http\Controllers\Inventory\ExpiryBatchController::class, 'acknowledgeAlert']);
         });
 
-        // ── POS: Counter end-of-day & order queue ──
-        Route::prefix('pos')->group(function () {
-            Route::post('end-of-day', [\App\Http\Controllers\POS\CounterEndOfDayController::class, 'close']);
-            Route::get('end-of-day/summary', [\App\Http\Controllers\POS\CounterEndOfDayController::class, 'summary']);
-            Route::get('queue', [\App\Http\Controllers\POS\OrderQueueController::class, 'index']);
-            Route::post('queue/{order}/print', [\App\Http\Controllers\POS\OrderQueueController::class, 'print']);
-        });
+        // (Counter end-of-day lives under counters/{counter}/eod and counter-eod
+        // above; the order queue under pos/queue. A stale duplicate block here
+        // pointed at controller methods that never existed and was removed.)
 
         // ── Offline POS fleet: Settings → Devices ──
         // Authorize a Windows till, watch it, and cut it off if it is lost.

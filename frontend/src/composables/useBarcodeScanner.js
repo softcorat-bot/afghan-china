@@ -164,5 +164,5 @@ export function scannerBeep (kind = 'ok') {
       osc.stop(at + dur + 0.02)
       at += dur + 0.03
     }
-  } catch (_) { /* a silent beep must never break a sale */ }
+  } catch { /* a silent beep must never break a sale */ }
 }

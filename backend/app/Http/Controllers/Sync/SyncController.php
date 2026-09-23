@@ -234,6 +234,42 @@ class SyncController extends Controller
         ]);
     }
 
+    /**
+     * Seed context for an offline installation: its company row, who belongs
+     * to that company, and the RBAC snapshot (roles, permissions and who holds
+     * them). The till applies it with PullApplier::applyContext() on its first
+     * `offline:seed` and on every Sync Now, before the sequenced pull — so the
+     * shape here must match what that method reads, table for table.
+     *
+     * Everything is scoped to the device's own company; roles/permissions are
+     * global because spatie/laravel-permission runs without teams here.
+     */
+    public function context(Request $request): JsonResponse
+    {
+        $device = $this->device($request);
+        $companyId = (int) $device->company_id;
+
+        $rows = fn ($query) => $query->get()->map(fn ($row) => (array) $row)->values()->all();
+
+        $company = DB::table('companies')->where('id', $companyId)->first();
+        $userIds = DB::table('company_user')->where('company_id', $companyId)->pluck('user_id')
+            ->merge(User::withoutGlobalScopes()->withTrashed()->where('company_id', $companyId)->pluck('id'))
+            ->unique()->values()->all();
+
+        return response()->json([
+            'company' => $company ? (array) $company : null,
+            'company_user' => $rows(DB::table('company_user')->where('company_id', $companyId)),
+            'roles' => $rows(DB::table('roles')),
+            'permissions' => $rows(DB::table('permissions')),
+            'role_has_permissions' => $rows(DB::table('role_has_permissions')),
+            'model_has_roles' => $rows(DB::table('model_has_roles')
+                ->where('model_type', User::class)->whereIn('model_id', $userIds)),
+            'model_has_permissions' => $rows(DB::table('model_has_permissions')
+                ->where('model_type', User::class)->whereIn('model_id', $userIds)),
+            'server_time' => now()->toIso8601String(),
+        ]);
+    }
+
     private function device(Request $request): PosDevice
     {
         /** @var PosDevice $device */

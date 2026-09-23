@@ -654,7 +654,7 @@ async function saveSettings () {
   savingSettings.value = true
   try {
     const { data } = await api.put('/settings/pos', { ...draft })
-    cfg.value = { ...POS_DEFAULTS, ...(data.settings || {}) }
+    cfg.value = { ...POS_DEFAULTS, ...data.settings }
     settingsOpen.value = false
     notify(t('Saved'), 'positive')
   } catch (e) {

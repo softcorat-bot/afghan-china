@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One push, pull or acknowledgement from one device. Kept so that "did the tills
@@ -23,6 +24,12 @@ class SyncBatch extends Model
             'cursor_before' => 'integer',
             'cursor_after' => 'integer',
         ];
+    }
+
+    /** The till that sent it. Keyed by the public device id string, not the row id. */
+    public function device(): BelongsTo
+    {
+        return $this->belongsTo(PosDevice::class, 'device_id', 'device_id');
     }
 
     public function scopeProblems($query)
