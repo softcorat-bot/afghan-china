@@ -16,7 +16,11 @@ const API_URL = (
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
-  withCredentials: true,
+  // Deliberately NOT sending credentials: auth here is a Bearer token (below),
+  // never a session cookie. Setting withCredentials would make every request a
+  // *credentialed* CORS call, which the browser refuses outright for the
+  // desktop app — its page is loaded over file://, so its Origin is the string
+  // `null`, and a credentialed request from `null` can never be satisfied.
   withXSRFToken: true,
   headers: { Accept: 'application/json' }
 })
